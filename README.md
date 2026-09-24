@@ -1,14 +1,16 @@
-# Welcome to your Lovable project
+# Remix of FTC Launchpad
+
+Create an FTC Simulator that runs junior people and fll members, people who are interested with little robotics exp through how ftc works, and a simulation of coding a robot for the 2026-27 field, with a demo robot and code, helping them learn. Have a couple pages, a home page, a simulation page, and an about us page: about us is FTC Team Cognition 19655; Established 2021 in Rancho Cordova Ca
 
 This project was built with [Lovable](https://lovable.dev).
 
 ## Build with Lovable
 
-Open your project in the [Lovable editor](https://lovable.dev) and keep building.
+Continue developing this project in the [Lovable editor](https://lovable.dev/projects/15a4fcfd-d512-4b23-a73d-387c06377448).
 
 - **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: connect the project to GitHub and every change made in Lovable is committed straight to your repository.
-- **Full ownership**: this code is yours. Push to your repository and your changes sync back into Lovable, ready for your next prompt.
+- **Stay in sync**: every change made in Lovable is committed straight to this repository.
+- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
 
 ## Development
 
@@ -20,10 +22,3 @@ cd <repository-name>
 npm i
 npm run dev
 ```
-
-## Built with
-
-- TanStack Start
-- TypeScript
-- React
-- Tailwind CSS
