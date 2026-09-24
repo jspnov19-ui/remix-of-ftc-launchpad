@@ -46,7 +46,7 @@ function Simulation() {
     localStorage.setItem(KEY, JSON.stringify(next));
   };
 
-  const unlocked = (i: number) => (i === 0 ? !!done.demo : !!done[MISSIONS[i - 1]!.id]);
+  const unlocked = (i: number) => (i === 0 ? !!done["demo"] : !!done[MISSIONS[i - 1]!.id]);
   const mission = sel >= 0 ? MISSIONS[sel]! : null;
   const curId = mission ? mission.id : "demo";
   const count = MISSIONS.filter((m) => done[m.id]).length;
@@ -77,7 +77,7 @@ function Simulation() {
             sel === -1 ? "border-accent-teal bg-accent-teal/15 text-accent-teal" : "border-border bg-white/5 hover:bg-white/10"
           }`}
         >
-          {done.demo ? "✓ " : ""}Demo
+          {done["demo"] ? "✓ " : ""}Demo
         </button>
         {MISSIONS.map((m, i) => {
           const open = unlocked(i);
