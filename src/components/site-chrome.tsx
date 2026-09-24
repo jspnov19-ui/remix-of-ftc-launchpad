@@ -1,15 +1,17 @@
 import { Link } from "@tanstack/react-router";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 const navItems = [
   { to: "/", label: "Home" },
   { to: "/simulation", label: "Simulation" },
+  { to: "/lessons", label: "Lessons" },
   { to: "/about", label: "About us" },
 ] as const;
 
 export function SiteChrome({ children }: { children: ReactNode }) {
+  const [open, setOpen] = useState(false);
   return (
-    <div className="relative min-h-screen w-full overflow-hidden bg-background text-foreground antialiased">
+    <div className="relative min-h-screen w-full overflow-x-hidden bg-background text-foreground antialiased">
       <div className="absolute inset-0 bg-gradient-to-br from-ink via-ink-deep to-ink" />
       <div
         className="absolute -top-40 -left-40 h-[520px] w-[520px] rounded-full bg-accent-sky/25 blur-3xl"
@@ -62,7 +64,31 @@ export function SiteChrome({ children }: { children: ReactNode }) {
                 Launch sim
               </Link>
             </nav>
+            <button
+              className="rounded-lg border border-border px-3 py-2 text-sm md:hidden"
+              aria-label="Toggle menu"
+              aria-expanded={open}
+              onClick={() => setOpen((o) => !o)}
+            >
+              {open ? "✕" : "☰"}
+            </button>
           </div>
+          {open && (
+            <nav className="glass-panel mt-2 flex flex-col rounded-2xl p-2 md:hidden">
+              {navItems.map((item) => (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  onClick={() => setOpen(false)}
+                  activeOptions={{ exact: item.to === "/" }}
+                  className="rounded-lg px-3 py-3 font-display text-sm hover:bg-white/10"
+                  activeProps={{ className: "bg-white/15" }}
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </nav>
+          )}
         </header>
 
         <main className="mx-auto max-w-6xl px-5 pb-16">{children}</main>
