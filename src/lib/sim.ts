@@ -23,6 +23,14 @@ export type Frame = {
   note: string;
 };
 
+export type Level = {
+  start: { x: number; y: number };
+  sample: { x: number; y: number } | null;
+  goal: { x: number; y: number } | null;
+};
+
+export const DEMO_LEVEL: Level = { start: START, sample: SAMPLE_TILE, goal: GOAL_TILE };
+
 export type ParseError = { line: number; message: string };
 
 export type Program = {
@@ -65,10 +73,13 @@ function clamp(n: number) {
   return Math.max(0, Math.min(FIELD_TILES - 1, n));
 }
 
-export function runProgram(source: string): Program {
+export function runProgram(source: string, level: Level = DEMO_LEVEL): Program {
   const errors: ParseError[] = [];
-  const frames: Frame[] = [baseFrame];
-  let s: Frame = { ...baseFrame };
+  const first: Frame = { ...baseFrame, x: level.start.x, y: level.start.y };
+  const frames: Frame[] = [first];
+  let s: Frame = { ...first };
+  const SAMPLE_TILE = level.sample ?? { x: -9, y: -9 };
+  const GOAL_TILE = level.goal ?? { x: -9, y: -9 };
 
   source.split("\n").forEach((raw, idx) => {
     const line = idx + 1;
@@ -192,6 +203,7 @@ export function runProgram(source: string): Program {
     }
 
     frames.push(next);
+    s = next;
   });
 
   return { frames, errors };
