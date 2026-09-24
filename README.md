@@ -5,7 +5,7 @@ Create an FTC Simulator that runs junior people and fll members, people who are 
 This project was built with [Lovable](https://lovable.dev).
 
 ## Build with Lovable
-
+ 
 Continue developing this project in the [Lovable editor](https://lovable.dev/projects/15a4fcfd-d512-4b23-a73d-387c06377448).
 
 - **Ship faster**: describe what you want to build and Lovable handles the code.

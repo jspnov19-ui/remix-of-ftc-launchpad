@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { FieldView } from "@/components/field-view";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { FieldView3D } from "@/components/field-3d/field-3d";
 import {
   COMMAND_HELP,
   DEFAULT_PROGRAM,
@@ -78,7 +78,9 @@ export function SimWorkbench({
             </div>
 
             <div className="relative aspect-square w-full bg-ink-deep p-2">
-              <FieldView frame={frame} level={level} showSample={!frame.holding && frame.score === 0} />
+              <Suspense fallback={<div className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading 3D field…</div>}>
+                <FieldView3D frame={frame} level={level} showSample={!frame.holding && frame.score === 0} />
+              </Suspense>
             </div>
 
             <div className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-4">
