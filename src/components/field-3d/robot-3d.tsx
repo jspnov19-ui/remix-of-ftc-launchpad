@@ -115,8 +115,16 @@ export function Robot3D({ frame }: { frame: Frame }) {
     clawTarget.current = frame.claw === "closed" ? 0.01 : 0.06;
   }, [frame.x, frame.y, frame.heading, frame.arm, frame.claw]);
 
-  useFrame((_, dt) => {
-    const k = Math.min(1, dt * 6); // smoothing factor
+  const initialized = useRef(false);
+  useFrame((_, rawDt) => {
+    const dt = Math.min(rawDt, 0.05);
+    if (!initialized.current) {
+      curPos.current.copy(targetPos.current);
+      prevPos.current.copy(targetPos.current);
+      curRotY.current = targetRotY.current;
+      initialized.current = true;
+    }
+    const k = 1 - Math.exp(-5 * dt); // frame-rate independent smoothing
 
     // Position lerp
     curPos.current.lerp(targetPos.current, k);
