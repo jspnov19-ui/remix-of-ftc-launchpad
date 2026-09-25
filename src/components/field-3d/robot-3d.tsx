@@ -13,6 +13,11 @@ const ROBOT_HALF = 0.75;
 const WHEEL_R = 0.16;
 const WHEEL_W = 0.12;
 
+// Arm angles: the arm is modeled pointing straight up (+y) at rotation 0.
+// "up" = vertical; "down" = rotated forward until it lies flat toward the ground.
+const ARM_UP = 0;
+const ARM_DOWN = 1.42; // ~81° forward — visually fully down, claw near the tiles
+
 // Convert grid (x,y) + heading to world position
 // Grid (0,0) = top-left, y grows down. In 3D: x→worldX, y→worldZ (flipped so +y in grid = +z)
 function gridToWorld(x: number, y: number): [number, number] {
@@ -92,13 +97,13 @@ export function Robot3D({ frame }: { frame: Frame }) {
   const targetPos = useRef(new THREE.Vector3());
   const targetRotY = useRef(0);
   const wheelSpin = useRef(0);
-  const armTarget = useRef(0); // radians, 0 = down, -1.1 = up
+  const armTarget = useRef(ARM_DOWN); // radians: ARM_UP = vertical, ARM_DOWN = flat forward
   const clawTarget = useRef(0.04); // gap
 
   // Smoothed values
   const curPos = useRef(new THREE.Vector3());
   const curRotY = useRef(0);
-  const curArm = useRef(0);
+  const curArm = useRef(ARM_DOWN);
   const curClaw = useRef(0.04);
 
   // Previous position for wheel spin calc
@@ -111,7 +116,7 @@ export function Robot3D({ frame }: { frame: Frame }) {
     // We rotate the group so that heading 0 faces −z. heading degrees clockwise in grid.
     // Convert: rotationY = −heading in radians (since +Y rotation is CCW when viewed from top)
     targetRotY.current = -(frame.heading * Math.PI) / 180;
-    armTarget.current = frame.arm === "up" ? -1.15 : 0;
+    armTarget.current = frame.arm === "up" ? ARM_UP : ARM_DOWN;
     clawTarget.current = frame.claw === "closed" ? 0.01 : 0.06;
   }, [frame.x, frame.y, frame.heading, frame.arm, frame.claw]);
 
