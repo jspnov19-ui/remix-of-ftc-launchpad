@@ -14,9 +14,10 @@ const WHEEL_R = 0.16;
 const WHEEL_W = 0.12;
 
 // Arm angles: the arm is modeled pointing straight up (+y) at rotation 0.
-// "up" = vertical; "down" = rotated forward until it lies flat toward the ground.
+// "up" = vertical; "down" = rotated forward (−Z) until it lies flat toward the ground.
+// Negative X rotation swings +Y toward −Z (forward, outside the chassis).
 const ARM_UP = 0;
-const ARM_DOWN = 1.42; // ~81° forward — visually fully down, claw near the tiles
+const ARM_DOWN = -1.42; // ~81° forward — folds down along the front profile
 
 // Convert grid (x,y) + heading to world position
 // Grid (0,0) = top-left, y grows down. In 3D: x→worldX, y→worldZ (flipped so +y in grid = +z)
@@ -227,8 +228,9 @@ export function Robot3D({ frame }: { frame: Frame }) {
       <MecanumWheel position={[wx, wy, wz]} rotation={[0, 0, Math.PI / 2]} spinRef={wheelSpin} />
 
       {/* ── Lifting Arm + Claw ── */}
-      {/* Arm pivot at front of robot */}
-      <group position={[0, 0.16, -ROBOT_HALF * 0.9]}>
+      {/* Arm pivot at the very front edge of the chassis so the arm folds
+          forward (−Z) along the outside front profile, never into the frame. */}
+      <group position={[0, 0.18, -ROBOT_HALF * 0.95]}>
         {/* Arm channel (rotates on X axis) */}
         <group ref={armRef}>
           {/* Arm extrusion */}

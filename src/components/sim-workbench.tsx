@@ -16,13 +16,26 @@ export function SimWorkbench({
   level = DEMO_LEVEL,
   starter = DEFAULT_PROGRAM,
   onFinish,
+  externalSource,
+  onSourceChange,
+  readOnly = false,
 }: {
   level?: Level;
   starter?: string;
   onFinish?: (last: Frame) => void;
+  externalSource?: string;
+  onSourceChange?: (s: string) => void;
+  readOnly?: boolean;
 }) {
-  const [source, setSource] = useState(starter);
-  useEffect(() => setSource(starter), [starter]);
+  const [internalSource, setInternalSource] = useState(starter);
+  const source = externalSource ?? internalSource;
+  const setSource = (s: string) => {
+    if (onSourceChange) onSourceChange(s);
+    if (!externalSource) setInternalSource(s);
+  };
+  useEffect(() => {
+    if (!externalSource) setInternalSource(starter);
+   }, [starter]);
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -154,6 +167,7 @@ export function SimWorkbench({
               onChange={(e) => setSource(e.target.value)}
               spellCheck={false}
               rows={12}
+              readOnly={readOnly}
               aria-label="Robot autonomous program"
               className="w-full resize-y bg-ink-deep/60 p-4 font-mono text-[12.5px] leading-relaxed text-secondary-foreground outline-none"
             />

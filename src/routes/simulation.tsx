@@ -10,12 +10,12 @@ export const Route = createFileRoute("/simulation")({
       {
         name: "description",
         content:
-          "Write an autonomous program, then take on 10 FTC missions of increasing difficulty on a realistic top-down field.",
+          "Write an autonomous program, then take on 25 FTC missions of increasing difficulty on a realistic 3D field.",
       },
       { property: "og:title", content: "Robot Simulation — 2026-27 FTC Field" },
       {
         property: "og:description",
-        content: "Run the demo robot, then unlock 10 autonomous missions from easy to championship level.",
+        content: "Run the demo robot, then unlock 25 autonomous missions from easy to championship level.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -61,7 +61,7 @@ function Simulation() {
           Program the robot
         </h1>
         <p className="mt-4 max-w-2xl text-lg leading-relaxed text-secondary-foreground">
-          Run the demo first to unlock 10 missions that get harder as you go. Press Run or Step to test
+          Run the demo first to unlock 25 missions that get harder as you go. Press Run or Step to test
           your code. New to coding?{" "}
           <Link to="/lessons" className="text-accent-teal underline underline-offset-4">
             Start with the lessons
@@ -70,10 +70,10 @@ function Simulation() {
         </p>
       </section>
 
-      <div className="mb-5 flex flex-wrap gap-2">
+      <div className="mb-5 flex flex-wrap gap-2 overflow-x-auto pb-2">
         <button
           onClick={() => setSel(-1)}
-          className={`rounded-xl border px-4 py-2 font-display text-sm ${
+          className={`shrink-0 rounded-xl border px-4 py-2 font-display text-sm ${
             sel === -1 ? "border-accent-teal bg-accent-teal/15 text-accent-teal" : "border-border bg-white/5 hover:bg-white/10"
           }`}
         >
@@ -87,7 +87,7 @@ function Simulation() {
               disabled={!open}
               onClick={() => setSel(i)}
               title={open ? m.title : "Finish the previous mission to unlock"}
-              className={`rounded-xl border px-3 py-2 font-display text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+              className={`shrink-0 rounded-xl border px-3 py-2 font-display text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                 sel === i ? "border-accent-teal bg-accent-teal/15 text-accent-teal" : "border-border bg-white/5 hover:bg-white/10"
               }`}
             >
