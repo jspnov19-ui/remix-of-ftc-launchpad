@@ -34,8 +34,8 @@ function BioBuzz() {
         let x = current.x;
         let y = current.y;
         let heading = current.heading;
-        if (key === "w") y = Math.max(0, y - 1);
-        if (key === "s") y = Math.min(5, y + 1);
+if (key === "w") y = Math.min(5, y + 1);
+    if (key === "s") y = Math.max(0, y - 1);
         if (key === "a") x = Math.max(0, x - 1);
         if (key === "d") x = Math.min(5, x + 1);
         if (key === "arrowleft") heading -= 15;
