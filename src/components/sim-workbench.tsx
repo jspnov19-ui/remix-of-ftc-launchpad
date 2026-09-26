@@ -16,10 +16,14 @@ export function SimWorkbench({
   level = DEMO_LEVEL,
   starter = DEFAULT_PROGRAM,
   onFinish,
+  timeLimit,
+  variant = "ftc",
 }: {
   level?: Level;
   starter?: string;
   onFinish?: (last: Frame) => void;
+  timeLimit?: number;
+  variant?: "ftc" | "biobuzz";
 }) {
   const [source, setSource] = useState(starter);
   useEffect(() => setSource(starter), [starter]);
@@ -30,7 +34,8 @@ export function SimWorkbench({
   const { frames, errors } = useMemo(() => runProgram(source, level), [source]);
   const safeIndex = Math.min(index, frames.length - 1);
   const frame = frames[safeIndex]!;
-  const elapsed = Math.min(30, safeIndex * 3.4);
+  const elapsed = frame.t;
+  const overTime = timeLimit != null && elapsed > timeLimit;
 
   useEffect(() => {
     setIndex(0);
@@ -73,13 +78,13 @@ export function SimWorkbench({
                 <span className="ml-2 text-[11px] text-secondary-foreground">autonomous.java</span>
               </div>
               <span className="text-[10px] tracking-wider text-muted-foreground uppercase">
-                {playing ? "◉ running" : "paused"}
+                {frame.crashed ? "✕ crashed" : playing ? "◉ running" : "paused"}
               </span>
             </div>
 
             <div className="relative aspect-square w-full bg-ink-deep p-2">
               <Suspense fallback={<div className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading 3D field…</div>}>
-                <FieldView3D frame={frame} level={level} showSample={!frame.holding && frame.score === 0} />
+                <FieldView3D frame={frame} level={level} variant={variant} />
               </Suspense>
             </div>
 
@@ -87,7 +92,7 @@ export function SimWorkbench({
               {[
                 { l: "Mode", v: "Autonomous", c: "" },
                 { l: "Score", v: String(frame.score), c: "text-accent-teal" },
-                { l: "Time", v: `${elapsed.toFixed(1)}s`, c: "" },
+                { l: timeLimit ? "Time / limit" : "Time", v: `${elapsed.toFixed(1)}s${timeLimit ? ` / ${timeLimit}s` : ""}`, c: overTime ? "text-tape" : "" },
                 {
                   l: "Step",
                   v: `${safeIndex}/${frames.length - 1}`,
