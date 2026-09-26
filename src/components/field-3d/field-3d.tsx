@@ -198,7 +198,7 @@ function GoalZone({ level }: { level: Level }) {
   );
 }
 
-// ── Sample Block ─────────────────────────────────────�����──���───
+// ── Sample Block ─────────────────────────────────────��������─���───
 function Samples({ level, taken, variant }: { level: Level; taken: number[]; variant: Variant }) {
   return (
     <>
@@ -457,7 +457,7 @@ function BioBuzzPieces() {
             <sphereGeometry args={[0.16, 20, 14]} />
             <meshStandardMaterial color="#f5c542" roughness={0.7} metalness={0.08} />
           </mesh>
-          <ballCollider args={[0.16]} />
+          <BallCollider args={[0.16]} />
         </RigidBody>
       ))}
     </group>
