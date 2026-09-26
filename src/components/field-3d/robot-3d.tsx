@@ -96,6 +96,8 @@ export function Robot3D({ frame, instant }: { frame: Frame; instant?: boolean })
   const armRef = useRef<THREE.Group>(null!);
   const clawL = useRef<THREE.Group>(null!);
   const clawR = useRef<THREE.Group>(null!);
+  const intakeRef = useRef<THREE.Group>(null!);
+  const launcherRef = useRef<THREE.Group>(null!);
 
   // Animation targets
   const targetPos = useRef(new THREE.Vector3());
@@ -168,6 +170,8 @@ export function Robot3D({ frame, instant }: { frame: Frame; instant?: boolean })
     curClaw.current += (clawTarget.current - curClaw.current) * k;
     if (clawL.current) clawL.current.position.x = -curClaw.current;
     if (clawR.current) clawR.current.position.x = curClaw.current;
+    if (intakeRef.current && frame.intake !== "idle") intakeRef.current.rotation.x += dt * (frame.intake === "in" ? 14 : -14);
+    if (launcherRef.current) launcherRef.current.rotation.y = (frame.aim * Math.PI) / 180;
   });
 
   // Wheel positions (relative to robot center)
@@ -295,6 +299,19 @@ export function Robot3D({ frame, instant }: { frame: Frame; instant?: boolean })
             )}
           </group>
         </group>
+      </group>
+
+      {/* ── Ball intake and adjustable launcher ── */}
+      <group position={[0, 0.28, -ROBOT_HALF - 0.12]} ref={intakeRef}>
+        {[-1, 1].map((side) => <mesh key={side} position={[side * 0.18, 0, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
+          <cylinderGeometry args={[0.1, 0.1, 0.34, 16]} />
+          <meshStandardMaterial color="#efb72d" metalness={0.55} roughness={0.35} emissive={frame.intake === "in" ? "#5f4300" : "#000000"} emissiveIntensity={0.4} />
+        </mesh>)}
+      </group>
+      <group position={[0, 0.55, -0.18]} ref={launcherRef}>
+        <mesh castShadow><boxGeometry args={[0.42, 0.12, 0.3]} /><meshStandardMaterial color="#28354a" metalness={0.55} roughness={0.35} /></mesh>
+        <mesh position={[0, 0.08, -0.18]} castShadow><cylinderGeometry args={[0.14, 0.14, 0.22, 18]} /><meshStandardMaterial color="#efb72d" metalness={0.7} roughness={0.3} emissive="#5d4200" emissiveIntensity={frame.power / 300} /></mesh>
+        <mesh position={[0, 0.08, -0.31]}><torusGeometry args={[0.1, 0.025, 10, 20]} /><meshStandardMaterial color="#e9edf0" metalness={0.8} /></mesh>
       </group>
 
       {/* ── Heading indicator arrow ── */}

@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Bug, Gamepad2, Keyboard, Sparkles } from "lucide-react";
+import { Bug, Gamepad2, Keyboard, Sparkles, Target, Zap } from "lucide-react";
 import { FieldView3D } from "@/components/field-3d/field-3d";
 import { SimWorkbench } from "@/components/sim-workbench";
 import { DEMO_LEVEL, runProgram, type Frame } from "@/lib/sim";
@@ -16,7 +16,7 @@ export const Route = createFileRoute("/biobuzz")({
 });
 
 const BIO_LEVEL = { start: { x: 1, y: 5 }, sample: { x: 2, y: 3 }, goal: { x: 4, y: 1 } };
-const AUTO = "drive(2)\nclaw(close)\narm(up)\nturn(90)\ndrive(2)\nscore()";
+const AUTO = "drive(2)\nintake(in)\naim(15)\npower(80)\nturn(90)\ndrive(2)\nintake(out)\nscore()";
 
 function BioBuzz() {
   const [mode, setMode] = useState<"teleop" | "autonomous">("teleop");
@@ -27,7 +27,7 @@ function BioBuzz() {
     if (mode !== "teleop") return;
     const onKey = (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
-      if (!["w", "a", "s", "d", "arrowleft", "arrowright", "i", "k", "o", "p"].includes(key)) return;
+      if (!["w", "a", "s", "d", "arrowleft", "arrowright", "i", "k", "o", "p", "j", "l", "u", "n", "m"].includes(key)) return;
       event.preventDefault();
       setPressed((current) => current.includes(key) ? current : [...current, key]);
       setTeleop((current) => {
@@ -40,7 +40,7 @@ function BioBuzz() {
         if (key === "d") x = Math.min(5, x + 1);
         if (key === "arrowleft") heading -= 15;
         if (key === "arrowright") heading += 15;
-        return { ...current, x, y, heading, arm: key === "i" ? "up" : key === "k" ? "down" : current.arm, claw: key === "o" ? "closed" : key === "p" ? "open" : current.claw, label: `Teleop: ${event.key}`, note: "Use WASD to move, arrows to steer, and the mechanism keys to interact." };
+        return { ...current, x, y, heading, arm: key === "i" ? "up" : key === "k" ? "down" : current.arm, claw: key === "o" ? "closed" : key === "p" ? "open" : current.claw, intake: ["j", "u"].includes(key) ? "in" : ["l", "n"].includes(key) ? "out" : key === "m" ? "idle" : current.intake, aim: key === "arrowleft" ? Math.max(-45, current.aim - 5) : key === "arrowright" ? Math.min(45, current.aim + 5) : current.aim, power: key === "i" ? Math.min(100, current.power + 10) : key === "k" ? Math.max(0, current.power - 10) : current.power, holding: ["j", "u"].includes(key) && !current.holding && current.x === 2 && current.y === 3 ? true : current.holding, label: `Teleop: ${event.key}`, note: "WASD drives. Arrows turn and aim. J/U intake, L/N outtake, I/K power." };
       });
     };
     const onUp = (event: KeyboardEvent) => setPressed((current) => current.filter((key) => key !== event.key.toLowerCase()));
@@ -75,8 +75,8 @@ function BioBuzz() {
           </div>
           <aside className="glass-panel flex flex-col gap-5 rounded-3xl p-6 lg:col-span-4">
             <div><p className="text-[10px] tracking-wider text-accent-teal uppercase">Teleop controls</p><h2 className="mt-2 font-display text-2xl font-semibold">Pilot the bot</h2><p className="mt-2 text-sm leading-relaxed text-secondary-foreground">Keyboard controls are active while this mode is selected.</p></div>
-            <div className="grid grid-cols-2 gap-2 text-xs"><div className="rounded-xl border border-border bg-white/5 p-3"><Keyboard className="mb-2 size-4 text-accent-sky" /><b>WASD</b><p className="mt-1 text-muted-foreground">drive / strafe</p></div><div className="rounded-xl border border-border bg-white/5 p-3"><Keyboard className="mb-2 size-4 text-accent-sky" /><b>Arrows</b><p className="mt-1 text-muted-foreground">steer heading</p></div><div className="rounded-xl border border-border bg-white/5 p-3"><b className="font-mono text-accent-teal">I / K</b><p className="mt-1 text-muted-foreground">arm up / down</p></div><div className="rounded-xl border border-border bg-white/5 p-3"><b className="font-mono text-accent-teal">O / P</b><p className="mt-1 text-muted-foreground">claw close / open</p></div></div>
-            <div className="rounded-xl border border-accent-sky/20 bg-accent-sky/10 p-4 text-sm"><p className="text-[10px] tracking-wider text-accent-sky uppercase">Live status</p><p className="mt-2 font-semibold">{teleop.label}</p><p className="mt-1 text-secondary-foreground">Tile {teleop.x + 1}, {6 - teleop.y} · Heading {teleop.heading}°</p><p className="mt-2 text-xs text-muted-foreground">{pressed.length ? `Pressed: ${pressed.join(", ")}` : "Waiting for input"}</p></div>
+            <div className="grid grid-cols-2 gap-2 text-xs"><div className="rounded-xl border border-border bg-white/5 p-3"><Keyboard className="mb-2 size-4 text-accent-sky" /><b>WASD</b><p className="mt-1 text-muted-foreground">drive / strafe</p></div><div className="rounded-xl border border-border bg-white/5 p-3"><Target className="mb-2 size-4 text-accent-sky" /><b>Arrows</b><p className="mt-1 text-muted-foreground">turn + aim</p></div><div className="rounded-xl border border-border bg-white/5 p-3"><b className="font-mono text-accent-teal">J / U</b><p className="mt-1 text-muted-foreground">intake ball</p></div><div className="rounded-xl border border-border bg-white/5 p-3"><b className="font-mono text-accent-teal">L / N</b><p className="mt-1 text-muted-foreground">outtake ball</p></div><div className="rounded-xl border border-border bg-white/5 p-3"><Zap className="mb-2 size-4 text-amber-300" /><b>I / K</b><p className="mt-1 text-muted-foreground">power + / −</p></div><div className="rounded-xl border border-border bg-white/5 p-3"><b className="font-mono text-accent-teal">M</b><p className="mt-1 text-muted-foreground">stop rollers</p></div></div>
+            <div className="rounded-xl border border-accent-sky/20 bg-accent-sky/10 p-4 text-sm"><p className="text-[10px] tracking-wider text-accent-sky uppercase">Live status</p><p className="mt-2 font-semibold">{teleop.label}</p><p className="mt-1 text-secondary-foreground">Tile {teleop.x + 1}, {6 - teleop.y} · Heading {teleop.heading}°</p><p className="mt-1 text-secondary-foreground">Aim {teleop.aim}° · Power {teleop.power}% · Rollers {teleop.intake}</p><p className="mt-2 text-xs text-muted-foreground">{pressed.length ? `Pressed: ${pressed.join(", ")}` : "Waiting for input"}</p></div>
           </aside>
         </div>
       ) : (
