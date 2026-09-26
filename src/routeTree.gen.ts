@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AboutRouteImport } from './routes/about'
+import { Route as BiobuzzRouteImport } from './routes/biobuzz'
 import { Route as LessonsRouteImport } from './routes/lessons'
 import { Route as SimulationRouteImport } from './routes/simulation'
 
@@ -22,6 +23,11 @@ const IndexRoute = IndexRouteImport.update({
 const AboutRoute = AboutRouteImport.update({
   id: '/about',
   path: '/about',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BiobuzzRoute = BiobuzzRouteImport.update({
+  id: '/biobuzz',
+  path: '/biobuzz',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LessonsRoute = LessonsRouteImport.update({
@@ -38,12 +44,14 @@ const SimulationRoute = SimulationRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/biobuzz': typeof BiobuzzRoute
   '/lessons': typeof LessonsRoute
   '/simulation': typeof SimulationRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/biobuzz': typeof BiobuzzRoute
   '/lessons': typeof LessonsRoute
   '/simulation': typeof SimulationRoute
 }
@@ -51,20 +59,22 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/biobuzz': typeof BiobuzzRoute
   '/lessons': typeof LessonsRoute
   '/simulation': typeof SimulationRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/about' | '/lessons' | '/simulation'
+  fullPaths: '/' | '/about' | '/biobuzz' | '/lessons' | '/simulation'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/about' | '/lessons' | '/simulation'
-  id: '__root__' | '/' | '/about' | '/lessons' | '/simulation'
+  to: '/' | '/about' | '/biobuzz' | '/lessons' | '/simulation'
+  id: '__root__' | '/' | '/about' | '/biobuzz' | '/lessons' | '/simulation'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
+  BiobuzzRoute: typeof BiobuzzRoute
   LessonsRoute: typeof LessonsRoute
   SimulationRoute: typeof SimulationRoute
 }
@@ -83,6 +93,13 @@ declare module '@tanstack/react-router' {
       path: '/about'
       fullPath: '/about'
       preLoaderRoute: typeof AboutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/biobuzz': {
+      id: '/biobuzz'
+      path: '/biobuzz'
+      fullPath: '/biobuzz'
+      preLoaderRoute: typeof BiobuzzRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/lessons': {
@@ -105,6 +122,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
+  BiobuzzRoute: BiobuzzRoute,
   LessonsRoute: LessonsRoute,
   SimulationRoute: SimulationRoute,
 }
