@@ -2,7 +2,7 @@ import { useRef, useMemo } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, ContactShadows } from "@react-three/drei";
 import * as THREE from "three";
-import { FIELD_TILES, type Frame, type Level } from "@/lib/sim";
+import { FIELD_TILES, levelSamples, type Frame, type Level } from "@/lib/sim";
 import { Robot3D } from "./robot-3d";
 
 const TILE = 2;
@@ -208,9 +208,128 @@ function GoalZone({ level }: { level: Level }) {
 }
 
 // ── Sample Block ────────────────────────────────────────────
-function SampleBlock({ level, visible }: { level: Level; visible: boolean }) {
-  if (!level.sample || !visible) return null;
-  const [wx, wz] = gridToWorld(level.sample.x, level.sample.y);
+function Samples({ level, taken, variant }: { level: Level; taken: number[]; variant: Variant }) {
+  return (
+    <>
+      {levelSamples(level).map((p, i) =>
+        taken.includes(i) ? null : variant === "biobuzz" ? (
+          <Pollen key={i} x={p.x} y={p.y} i={i} />
+        ) : (
+          <SampleBlock key={i} x={p.x} y={p.y} />
+        ),
+      )}
+    </>
+  );
+}
+
+const POLLEN_COLORS = ["#ffb703", "#fb8500", "#e63946", "#8338ec", "#06d6a0"];
+function Pollen({ x, y, i }: { x: number; y: number; i: number }) {
+  const [wx, wz] = gridToWorld(x, y);
+  const c = POLLEN_COLORS[i % POLLEN_COLORS.length]!;
+  return (
+    <group position={[wx, 0.14, wz]}>
+      <mesh castShadow>
+        <sphereGeometry args={[0.14, 20, 16]} />
+        <meshStandardMaterial color={c} roughness={0.8} emissive={c} emissiveIntensity={0.15} />
+      </mesh>
+      {Array.from({ length: 10 }).map((_, k) => {
+        const a = (k / 10) * Math.PI * 2;
+        const e = ((k % 3) - 1) * 0.6;
+        return (
+          <mesh key={k} position={[Math.cos(a) * 0.13, Math.sin(e) * 0.12, Math.sin(a) * 0.13]}>
+            <sphereGeometry args={[0.035, 8, 6]} />
+            <meshStandardMaterial color={c} roughness={0.9} />
+          </mesh>
+        );
+      })}
+    </group>
+  );
+}
+
+function Obstacles({ level, variant }: { level: Level; variant: Variant }) {
+  return (
+    <>
+      {(level.obstacles ?? []).map((o, i) => {
+        const [wx, wz] = gridToWorld(o.x, o.y);
+        return (
+          <group key={i} position={[wx, 0, wz]}>
+            <mesh position={[0, 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+              <planeGeometry args={[TILE * 0.96, TILE * 0.96]} />
+              <meshStandardMaterial color={variant === "biobuzz" ? "#7a4a1f" : "#8a1c1c"} roughness={0.9} />
+            </mesh>
+            {[-0.5, 0.5].map((dx) =>
+              [-0.5, 0.5].map((dz) => (
+                <mesh key={`${dx}${dz}`} position={[dx, 0.2, dz]} castShadow>
+                  <coneGeometry args={[0.14, 0.4, 12]} />
+                  <meshStandardMaterial color="#ff6a1a" roughness={0.6} />
+                </mesh>
+              )),
+            )}
+          </group>
+        );
+      })}
+    </>
+  );
+}
+
+// ── BioBuzz decorations: flowers + nectar box ──
+const FLOWER_SPOTS: [number, number, string][] = [
+  [-5.5, -5.5, "#ff5d8f"], [5.5, -5.5, "#ffd23f"], [-5.5, 5.5, "#a06cd5"], [5.5, 5.5, "#ff8c42"],
+  [-5.6, -1.2, "#4cc9f0"], [5.6, 1.4, "#f72585"], [-1.4, 5.6, "#ffd23f"], [1.6, -5.6, "#ff5d8f"],
+  [-5.6, 2.5, "#ff8c42"], [5.6, -3, "#a06cd5"],
+];
+function Flower({ x, z, color }: { x: number; z: number; color: string }) {
+  return (
+    <group position={[x, 0, z]}>
+      <mesh position={[0, 0.3, 0]} castShadow>
+        <cylinderGeometry args={[0.025, 0.035, 0.6, 8]} />
+        <meshStandardMaterial color="#3a8a3a" />
+      </mesh>
+      <mesh position={[0.1, 0.22, 0]} rotation={[0, 0, -0.8]}>
+        <sphereGeometry args={[0.08, 10, 6]} />
+        <meshStandardMaterial color="#4caf50" />
+      </mesh>
+      {Array.from({ length: 6 }).map((_, k) => {
+        const a = (k / 6) * Math.PI * 2;
+        return (
+          <mesh key={k} position={[Math.cos(a) * 0.13, 0.62, Math.sin(a) * 0.13]} scale={[1, 0.35, 1]} castShadow>
+            <sphereGeometry args={[0.1, 12, 8]} />
+            <meshStandardMaterial color={color} roughness={0.6} />
+          </mesh>
+        );
+      })}
+      <mesh position={[0, 0.64, 0]}>
+        <sphereGeometry args={[0.07, 12, 8]} />
+        <meshStandardMaterial color="#5a3a10" roughness={0.9} />
+      </mesh>
+    </group>
+  );
+}
+function NectarBox({ level }: { level: Level }) {
+  if (!level.goal) return null;
+  const [wx, wz] = gridToWorld(level.goal.x, level.goal.y);
+  return (
+    <group position={[wx, 0, wz]}>
+      <mesh position={[0, 0.004, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[TILE * 0.92, TILE * 0.92]} />
+        <meshStandardMaterial color="#f2a900" transparent opacity={0.3} />
+      </mesh>
+      {[[0.6, 0], [-0.6, 0], [0, 0.6], [0, -0.6]].map(([dx, dz], k) => (
+        <mesh key={k} position={[dx!, 0.15, dz!]} castShadow>
+          <boxGeometry args={[dx ? 0.06 : 1.26, 0.3, dx ? 1.26 : 0.06]} />
+          <meshStandardMaterial color="#e0a526" metalness={0.2} roughness={0.5} />
+        </mesh>
+      ))}
+      <mesh position={[0, 0.06, 0]}>
+        <cylinderGeometry args={[0.4, 0.4, 0.1, 6]} />
+        <meshStandardMaterial color="#ffb703" emissive="#ff9e00" emissiveIntensity={0.3} roughness={0.2} />
+      </mesh>
+    </group>
+  );
+}
+
+function SampleBlock({ x, y }: { x: number; y: number }) {
+  const [wx, wz] = gridToWorld(x, y);
   return (
     <group position={[wx, 0.08, wz]} rotation={[0, (15 * Math.PI) / 180, 0]}>
       <mesh castShadow>
@@ -233,15 +352,8 @@ function SampleBlock({ level, visible }: { level: Level; visible: boolean }) {
 }
 
 // ── Scene ───────────────────────────────────────────────────
-function Scene({
-  frame,
-  level,
-  showSample,
-}: {
-  frame: Frame;
-  level: Level;
-  showSample: boolean;
-}) {
+type Variant = "ftc" | "biobuzz";
+function Scene({ frame, level, variant, instant }: { frame: Frame; level: Level; variant: Variant; instant?: boolean }) {
   return (
     <>
       <ambientLight intensity={0.45} />
@@ -261,10 +373,20 @@ function Scene({
       <AllianceBorders />
       <PerimeterWalls />
       <StartingBox level={level} />
-      <GoalZone level={level} />
-      <SampleBlock level={level} visible={showSample} />
+      {variant === "biobuzz" ? (
+        <>
+          <NectarBox level={level} />
+          {FLOWER_SPOTS.map(([x, z, c], i) => (
+            <Flower key={i} x={x} z={z} color={c} />
+          ))}
+        </>
+      ) : (
+        <GoalZone level={level} />
+      )}
+      <Obstacles level={level} variant={variant} />
+      <Samples level={level} taken={frame.taken} variant={variant} />
 
-      <Robot3D frame={frame} />
+      <Robot3D frame={frame} instant={instant} />
 
       <ContactShadows
         position={[0, 0.01, 0]}
@@ -289,11 +411,13 @@ function Scene({
 export function FieldView3D({
   frame,
   level,
-  showSample,
+  variant = "ftc",
+  instant,
 }: {
   frame: Frame;
   level: Level;
-  showSample: boolean;
+  variant?: Variant;
+  instant?: boolean;
 }) {
   return (
     <Canvas
@@ -303,8 +427,8 @@ export function FieldView3D({
       gl={{ antialias: true, alpha: true }}
       style={{ width: "100%", height: "100%" }}
     >
-      <color attach="background" args={["#0e0e14"]} />
-      <Scene frame={frame} level={level} showSample={showSample} />
+      <color attach="background" args={[variant === "biobuzz" ? "#10180f" : "#0e0e14"]} />
+      <Scene frame={frame} level={level} variant={variant} instant={instant} />
     </Canvas>
   );
 }
