@@ -21,13 +21,30 @@ export type Frame = {
   score: number;
   label: string;
   note: string;
+  /** virtual seconds elapsed */
+  t: number;
+  /** robot tried to drive into an obstacle tile */
+  crashed: boolean;
+  /** indices of samples that were picked up (held or scored) */
+  taken: number[];
 };
 
 export type Level = {
   start: { x: number; y: number };
   sample: { x: number; y: number } | null;
   goal: { x: number; y: number } | null;
+  /** extra samples for multi-delivery missions (sample above is index 0) */
+  samples?: { x: number; y: number }[];
+  /** forbidden tiles the robot may not enter */
+  obstacles?: { x: number; y: number }[];
 };
+
+export function levelSamples(level: Level) {
+  return [...(level.sample ? [level.sample] : []), ...(level.samples ?? [])];
+}
+
+/** Virtual time cost of each command, in seconds. */
+export const TIME_COST = { tile: 1, turn90: 0.5, arm: 0.8, claw: 0.5, score: 0.5 };
 
 export const DEMO_LEVEL: Level = { start: START, sample: SAMPLE_TILE, goal: GOAL_TILE };
 
@@ -61,6 +78,9 @@ const baseFrame: Frame = {
   holding: false,
   score: 0,
   label: "Robot initialized",
+  t: 0,
+  crashed: false,
+  taken: [],
   note: "Every autonomous program starts from a legal starting position touching the wall. Press Step to run one line at a time, or Run to watch the whole 30 seconds.",
 };
 
@@ -78,7 +98,8 @@ export function runProgram(source: string, level: Level = DEMO_LEVEL): Program {
   const first: Frame = { ...baseFrame, x: level.start.x, y: level.start.y };
   const frames: Frame[] = [first];
   let s: Frame = { ...first };
-  const SAMPLE_TILE = level.sample ?? { x: -9, y: -9 };
+  const samples = levelSamples(level);
+  const blocked = (x: number, y: number) => (level.obstacles ?? []).some((o) => o.x === x && o.y === y);
   const GOAL_TILE = level.goal ?? { x: -9, y: -9 };
 
   source.split("\n").forEach((raw, idx) => {
@@ -107,14 +128,24 @@ export function runProgram(source: string, level: Level = DEMO_LEVEL): Program {
           return;
         }
         const rad = (s.heading * Math.PI) / 180;
-        const dx = Math.round(Math.sin(rad)) * tiles;
-        const dy = -Math.round(Math.cos(rad)) * tiles;
-        next.x = clamp(s.x + dx);
-        next.y = clamp(s.y + dy);
+        const sx = Math.round(Math.sin(rad)) * Math.sign(tiles);
+        const sy = -Math.round(Math.cos(rad)) * Math.sign(tiles);
+        let cx = s.x, cy = s.y, moved = 0;
+        for (let k = 0; k < Math.abs(tiles); k++) {
+          const nx = cx + sx, ny = cy + sy;
+          if (nx !== clamp(nx) || ny !== clamp(ny)) break;
+          if (blocked(nx, ny)) { next.crashed = true; break; }
+          cx = nx; cy = ny; moved++;
+        }
+        next.x = cx;
+        next.y = cy;
+        next.t = s.t + Math.max(1, moved) * TIME_COST.tile * (sx !== 0 && sy !== 0 ? 1.4 : 1);
         next.label = `drive(${tiles})`;
         next.note = `Both drive motors run the same direction, so the robot moves ${Math.abs(
           tiles,
         )} tile${Math.abs(tiles) === 1 ? "" : "s"} in a straight line. Encoders count the wheel turns and stop it there.`;
+        if (next.crashed)
+          next.note = "CRASH! The robot hit a forbidden obstacle tile and stopped. Plan a path around the red zones.";
         break;
       }
       case "turn": {
@@ -124,6 +155,7 @@ export function runProgram(source: string, level: Level = DEMO_LEVEL): Program {
           return;
         }
         next.heading = ((s.heading + deg) % 360 + 360) % 360;
+        next.t = s.t + (Math.abs(deg) / 90) * TIME_COST.turn90;
         next.label = `turn(${deg})`;
         next.note = `The wheels spin opposite directions so the robot pivots in place ${Math.abs(
           deg,
@@ -137,6 +169,7 @@ export function runProgram(source: string, level: Level = DEMO_LEVEL): Program {
           return;
         }
         next.arm = dir;
+        next.t = s.t + TIME_COST.arm;
         next.label = `arm(${dir})`;
         next.note =
           dir === "up"
@@ -150,11 +183,15 @@ export function runProgram(source: string, level: Level = DEMO_LEVEL): Program {
           errors.push({ line, message: "claw() takes open or close, like claw(close)." });
           return;
         }
+        next.t = s.t + TIME_COST.claw;
         if (dir === "close") {
           next.claw = "closed";
-          const onSample =
-            s.x === SAMPLE_TILE.x && s.y === SAMPLE_TILE.y && s.arm === "down";
-          next.holding = onSample;
+          const idx = samples.findIndex(
+            (p, i) => p.x === s.x && p.y === s.y && !s.taken.includes(i),
+          );
+          const onSample = !s.holding && idx >= 0 && s.arm === "down";
+          next.holding = s.holding || onSample;
+          if (onSample) next.taken = [...s.taken, idx];
           next.label = "claw(close)";
           next.note = onSample
             ? "The claw servo squeezes shut on the sample. Servos hold a position instead of spinning, which is why they're used for grabbers."
@@ -162,14 +199,18 @@ export function runProgram(source: string, level: Level = DEMO_LEVEL): Program {
         } else {
           next.claw = "open";
           next.holding = false;
+          if (s.holding) next.taken = s.taken.slice(0, -1); // referee resets it to its mark
           next.label = "claw(open)";
-          next.note = "The claw opens and whatever it held drops onto the tile below.";
+          next.note = s.holding
+            ? "The claw opened away from the goal — the sample drops and the referee puts it back on its mark."
+            : "The claw opens.";
         }
         break;
       }
       case "score": {
         const inGoal = s.x === GOAL_TILE.x && s.y === GOAL_TILE.y;
         next.label = "score()";
+        next.t = s.t + TIME_COST.score;
         next.claw = "open";
         if (inGoal && s.holding) {
           next.holding = false;
@@ -190,6 +231,7 @@ export function runProgram(source: string, level: Level = DEMO_LEVEL): Program {
           errors.push({ line, message: "wait() needs seconds, like wait(1)." });
           return;
         }
+        next.t = s.t + Math.max(0, sec);
         next.label = `wait(${sec})`;
         next.note = `The robot pauses ${sec}s. Real teams add short waits to let the arm finish moving before driving away.`;
         break;
@@ -211,7 +253,7 @@ export function runProgram(source: string, level: Level = DEMO_LEVEL): Program {
 
 export const COMMAND_HELP = [
   { code: "drive(2)", what: "Drive forward 2 tiles (negative goes backward)." },
-  { code: "turn(90)", what: "Pivot right 90°. turn(-90) pivots left." },
+  { code: "turn(90)", what: "Pivot right 90°. turn(-90) pivots left. turn(45) aims diagonally." },
   { code: "arm(up)", what: "Raise or lower the arm: arm(up) / arm(down)." },
   { code: "claw(close)", what: "Grab or drop: claw(close) / claw(open)." },
   { code: "score()", what: "Release a held sample. Only scores inside the goal zone." },

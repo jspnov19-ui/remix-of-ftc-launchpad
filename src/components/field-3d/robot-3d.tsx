@@ -15,8 +15,12 @@ const WHEEL_W = 0.12;
 
 // Arm angles: the arm is modeled pointing straight up (+y) at rotation 0.
 // "up" = vertical; "down" = rotated forward until it lies flat toward the ground.
+// Negative X rotation swings +y toward −z, i.e. OUT the front of the robot.
+// (A positive angle swung the arm backwards through the chassis.)
 const ARM_UP = 0;
-const ARM_DOWN = 1.42; // ~81° forward — visually fully down, claw near the tiles
+const ARM_DOWN = -1.95; // ~112° forward — arm folds down past the front bumper, claw at tile level
+const ARM_PIVOT_Z = -ROBOT_HALF - 0.08; // pivot sits just outside the front frame
+const ARM_PIVOT_Y = 0.3;
 
 // Convert grid (x,y) + heading to world position
 // Grid (0,0) = top-left, y grows down. In 3D: x→worldX, y→worldZ (flipped so +y in grid = +z)
@@ -87,7 +91,7 @@ function MecanumWheel({
 }
 
 // ── Robot ───────────────────────────────────────────────────
-export function Robot3D({ frame }: { frame: Frame }) {
+export function Robot3D({ frame, instant }: { frame: Frame; instant?: boolean }) {
   const group = useRef<THREE.Group>(null!);
   const armRef = useRef<THREE.Group>(null!);
   const clawL = useRef<THREE.Group>(null!);
@@ -129,7 +133,7 @@ export function Robot3D({ frame }: { frame: Frame }) {
       curRotY.current = targetRotY.current;
       initialized.current = true;
     }
-    const k = 1 - Math.exp(-5 * dt); // frame-rate independent smoothing
+    const k = instant ? 1 - Math.exp(-25 * dt) : 1 - Math.exp(-5 * dt); // frame-rate independent smoothing
 
     // Position lerp
     curPos.current.lerp(targetPos.current, k);
@@ -228,7 +232,7 @@ export function Robot3D({ frame }: { frame: Frame }) {
 
       {/* ── Lifting Arm + Claw ── */}
       {/* Arm pivot at front of robot */}
-      <group position={[0, 0.16, -ROBOT_HALF * 0.9]}>
+      <group position={[0, ARM_PIVOT_Y, ARM_PIVOT_Z]}>
         {/* Arm channel (rotates on X axis) */}
         <group ref={armRef}>
           {/* Arm extrusion */}
