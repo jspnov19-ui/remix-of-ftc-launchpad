@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, ContactShadows, useGLTF } from "@react-three/drei";
-import { BallCollider, Physics, RigidBody, CuboidCollider } from "@react-three/rapier";
+import { Physics, RigidBody, CuboidCollider } from "@react-three/rapier";
 import * as THREE from "three";
 import { FIELD_TILES, levelSamples, type Frame, type Level } from "@/lib/sim";
 import { Robot3D } from "./robot-3d";
@@ -198,7 +198,7 @@ function GoalZone({ level }: { level: Level }) {
   );
 }
 
-// ── Sample Block ─────────────────────────────────────��������─���───
+// ── Sample Block ─────────────────────────────────────����������─���───
 function Samples({ level, taken, variant }: { level: Level; taken: number[]; variant: Variant }) {
   return (
     <>
@@ -406,10 +406,10 @@ function CentralScoringStructure() {
 
 function CornerTubes() {
   const spots = [
-    [-5.25, -5.25],
-    [5.25, -5.25],
-    [-5.25, 5.25],
-    [5.25, 5.25],
+    [-1.58, -1.58],
+    [1.58, -1.58],
+    [-1.58, 1.58],
+    [1.58, 1.58],
   ] as const;
   return (
     <group>
@@ -437,8 +437,8 @@ function CornerTubes() {
 
 function BioBuzzPieces() {
   const pieces = Array.from({ length: 16 }, (_, i) => ({
-    x: -4.7 + (i % 8) * 1.35,
-    z: i < 8 ? 5.15 : -5.15,
+    x: -1.35 + (i % 8) * 0.38,
+    z: i < 8 ? 1.58 : -1.58,
   }));
   return (
     <group>
@@ -446,7 +446,7 @@ function BioBuzzPieces() {
         <RigidBody
           key={i}
           type="dynamic"
-          colliders={false}
+          colliders="ball"
           position={[p.x, 0.18, p.z]}
           restitution={0.35}
           friction={0.7}
@@ -454,10 +454,9 @@ function BioBuzzPieces() {
           angularDamping={0.4}
         >
           <mesh castShadow>
-            <sphereGeometry args={[0.16, 20, 14]} />
+            <sphereGeometry args={[0.045, 20, 14]} />
             <meshStandardMaterial color="#f5c542" roughness={0.7} metalness={0.08} />
           </mesh>
-          <BallCollider args={[0.16]} />
         </RigidBody>
       ))}
     </group>
@@ -472,13 +471,13 @@ function BioBuzzFieldAsset() {
   const { scene } = useGLTF(BIOBUZZ_FIELD_ASSET);
   return (
     <RigidBody type="fixed" colliders="trimesh" friction={0.8} restitution={0.05}>
-      <primitive object={scene} position={[0, 0, 0]} scale={1} />
+      <primitive object={scene} position={[0, 0, 0]} scale={0.3041667} />
     </RigidBody>
   );
 }
 
 function StaticFieldColliders() {
-  const wall = 6.12;
+  const wall = 1.82;
   return (
     <RigidBody type="fixed" colliders={false} friction={0.9} restitution={0.05}>
       <Collider position={[0, 0.42, -wall]} args={[6.12, 0.42, 0.08]} />

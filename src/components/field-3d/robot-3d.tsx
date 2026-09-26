@@ -6,11 +6,12 @@ import { CuboidCollider, RigidBody, type RapierRigidBody } from "@react-three/ra
 
 // ── Constants ──────────────────────────────────────────────
 // Field is 6×6 tiles, each tile = 24" (0.6096 m). We use 1 tile = 2 units.
-const TILE = 2;
-const FIELD_SIZE = 6 * TILE; // 12 units
+const TILE = 3.65 / 6;
+const FIELD_SIZE = 3.65;
 
-// Robot is 18" → 18/24 * 2 = 1.5 units per side
-const ROBOT_HALF = 0.75;
+// The authored robot is scaled to the FTC 18-inch maximum: 0.45 units square.
+const ROBOT_HALF = 0.225;
+const ROBOT_MODEL_SCALE = 0.3;
 const WHEEL_R = 0.16;
 const WHEEL_W = 0.12;
 
@@ -115,7 +116,12 @@ export function Robot3D({ frame, instant }: { frame: Frame; instant?: boolean })
 
   useMemo(() => {
     const [wx, wz] = gridToWorld(frame.x, frame.y);
-    targetPos.current.set(wx, 0, wz);
+    const boundary = FIELD_SIZE / 2 - ROBOT_HALF - 0.04;
+    targetPos.current.set(
+      THREE.MathUtils.clamp(wx, -boundary, boundary),
+      0,
+      THREE.MathUtils.clamp(wz, -boundary, boundary),
+    );
     // Heading: 0 = up (−z). In three.js, rotation around Y.
     // We rotate the group so that heading 0 faces −z. heading degrees clockwise in grid.
     // Convert: rotationY = −heading in radians (since +Y rotation is CCW when viewed from top)
@@ -189,7 +195,7 @@ export function Robot3D({ frame, instant }: { frame: Frame; instant?: boolean })
       enabledTranslations={[true, false, true]}
     >
       <CuboidCollider args={[ROBOT_HALF, 0.32, ROBOT_HALF]} />
-      <group ref={group}>
+      <group ref={group} scale={ROBOT_MODEL_SCALE}>
         {/* Shadow plane */}
         <mesh position={[0, 0.001, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <planeGeometry args={[ROBOT_HALF * 2.2, ROBOT_HALF * 2.2]} />
