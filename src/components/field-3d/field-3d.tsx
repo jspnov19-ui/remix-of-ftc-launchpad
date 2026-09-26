@@ -1,5 +1,5 @@
-import { useRef, useMemo } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { useMemo } from "react";
+import { Canvas } from "@react-three/fiber";
 import { OrbitControls, ContactShadows } from "@react-three/drei";
 import * as THREE from "three";
 import { FIELD_TILES, levelSamples, type Frame, type Level } from "@/lib/sim";
@@ -207,7 +207,7 @@ function GoalZone({ level }: { level: Level }) {
   );
 }
 
-// ── Sample Block ─────────────────────────────────────���──���───
+// ── Sample Block ─────────────────────────────────────�����──���───
 function Samples({ level, taken, variant }: { level: Level; taken: number[]; variant: Variant }) {
   return (
     <>
@@ -351,40 +351,35 @@ function SampleBlock({ x, y }: { x: number; y: number }) {
   );
 }
 
-// ── BioBuzz central Hive and field pieces ───────────────────
-function Hive() {
-  const wheel = useRef<THREE.Group>(null!);
-  useFrame((_, dt) => {
-    if (wheel.current) wheel.current.rotation.z += dt * 0.45;
-  });
-  const baskets = Array.from({ length: 10 }, (_, i) => {
-    const a = (i / 10) * Math.PI * 2;
-    return { a, color: i % 2 ? "#d93645" : "#3b6fde" };
-  });
+// ── BioBuzz central angled scoring structure ─────────────────
+function CentralScoringStructure() {
+  const baskets = [-1, 1] as const;
   return (
-    <group position={[0, 1.15, 0]}>
-      <mesh position={[0, -0.5, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-        <cylinderGeometry args={[0.18, 0.18, 3.1, 20]} />
-        <meshStandardMaterial color="#aeb5ba" metalness={0.9} roughness={0.28} />
+    <group position={[0, 0, 0]}>
+      <mesh position={[0, 0.72, 0]} castShadow>
+        <boxGeometry args={[0.16, 1.45, 0.16]} />
+        <meshStandardMaterial color="#aeb5ba" metalness={0.9} roughness={0.3} />
       </mesh>
-      <group ref={wheel} rotation={[0, Math.PI / 2, 0]}>
-        <mesh rotation={[Math.PI / 2, 0, 0]}>
-          <torusGeometry args={[1.45, 0.09, 12, 48]} />
-          <meshStandardMaterial color="#d1d6da" metalness={0.85} roughness={0.3} />
-        </mesh>
-        {Array.from({ length: 10 }, (_, i) => {
-          const a = (i / 10) * Math.PI * 2;
-          return <mesh key={i} rotation={[0, 0, a]}><boxGeometry args={[0.06, 2.9, 0.06]} /><meshStandardMaterial color="#aeb5ba" metalness={0.8} /></mesh>;
-        })}
-        {baskets.map(({ a, color }, i) => (
-          <group key={i} position={[Math.cos(a) * 1.45, Math.sin(a) * 1.45, 0]}>
-            <mesh castShadow><boxGeometry args={[0.32, 0.42, 0.28]} /><meshStandardMaterial color={color} metalness={0.25} roughness={0.55} /></mesh>
-            <mesh position={[0, 0.24, 0]}><torusGeometry args={[0.14, 0.025, 8, 18]} /><meshStandardMaterial color="#f2c94c" metalness={0.6} /></mesh>
-          </group>
-        ))}
-      </group>
-      {[-1, 1].map((x) => <mesh key={x} position={[x * 0.72, -0.6, 0]} rotation={[0, 0, x * 0.45]} castShadow><boxGeometry args={[0.12, 1.8, 0.12]} /><meshStandardMaterial color="#b9c0c4" metalness={0.85} roughness={0.3} /></mesh>)}
-      <mesh position={[0, 0.05, 0]}><cylinderGeometry args={[0.28, 0.28, 0.12, 24]} /><meshStandardMaterial color="#e0a526" metalness={0.45} /></mesh>
+      {baskets.map((side) => (
+        <group key={side} position={[side * 0.72, 1.32, 0]} rotation={[0, 0, side * 0.28]}>
+          <mesh castShadow>
+            <boxGeometry args={[0.1, 2.3, 0.1]} />
+            <meshStandardMaterial color="#969da2" metalness={0.85} roughness={0.3} />
+          </mesh>
+          <mesh position={[0, 1.12, 0]} rotation={[Math.PI / 2, 0, 0]}>
+            <torusGeometry args={[0.48, 0.07, 10, 20]} />
+            <meshStandardMaterial color={side < 0 ? "#3157c9" : "#d93645"} metalness={0.5} roughness={0.35} />
+          </mesh>
+          <mesh position={[0, 1.08, 0]}>
+            <cylinderGeometry args={[0.38, 0.38, 0.04, 20]} />
+            <meshStandardMaterial color="#282828" roughness={0.9} />
+          </mesh>
+        </group>
+      ))}
+      <mesh position={[0, 0.08, 0]} rotation={[0, 0, Math.PI / 2]}>
+        <boxGeometry args={[2.3, 0.12, 0.12]} />
+        <meshStandardMaterial color="#b9c0c4" metalness={0.85} roughness={0.3} />
+      </mesh>
     </group>
   );
 }
@@ -427,13 +422,10 @@ function Scene({ frame, level, variant, instant }: { frame: Frame; level: Level;
       <StartingBox level={level} />
       {variant === "biobuzz" ? (
         <>
-          <Hive />
+          <CentralScoringStructure />
           <CornerTubes />
           <BioBuzzPieces />
           <NectarBox level={level} />
-          {FLOWER_SPOTS.map(([x, z, c], i) => (
-            <Flower key={i} x={x} z={z} color={c} />
-          ))}
         </>
       ) : (
         <GoalZone level={level} />
