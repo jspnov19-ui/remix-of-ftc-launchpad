@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, ContactShadows, useGLTF } from "@react-three/drei";
-import { Physics, RigidBody, CuboidCollider } from "@react-three/rapier";
+import { BallCollider, Physics, RigidBody, CuboidCollider } from "@react-three/rapier";
 import * as THREE from "three";
 import { FIELD_TILES, levelSamples, type Frame, type Level } from "@/lib/sim";
 import { Robot3D } from "./robot-3d";
@@ -443,10 +443,22 @@ function BioBuzzPieces() {
   return (
     <group>
       {pieces.map((p, i) => (
-        <mesh key={i} position={[p.x, 0.17, p.z]} castShadow>
-          <sphereGeometry args={[0.16, 16, 12]} />
-          <meshStandardMaterial color="#f5c542" roughness={0.7} />
-        </mesh>
+        <RigidBody
+          key={i}
+          type="dynamic"
+          colliders={false}
+          position={[p.x, 0.18, p.z]}
+          restitution={0.35}
+          friction={0.7}
+          linearDamping={0.35}
+          angularDamping={0.4}
+        >
+          <mesh castShadow>
+            <sphereGeometry args={[0.16, 20, 14]} />
+            <meshStandardMaterial color="#f5c542" roughness={0.7} metalness={0.08} />
+          </mesh>
+          <ballCollider args={[0.16]} />
+        </RigidBody>
       ))}
     </group>
   );

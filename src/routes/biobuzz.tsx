@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Bug, Gamepad2, Keyboard, Sparkles, Target, Zap } from "lucide-react";
 import { FieldView3D } from "@/components/field-3d/field-3d";
 import { SimWorkbench } from "@/components/sim-workbench";
@@ -22,31 +22,42 @@ function BioBuzz() {
   const [mode, setMode] = useState<"teleop" | "autonomous">("teleop");
   const [teleop, setTeleop] = useState<Frame>(() => runProgram("", BIO_LEVEL).frames[0]!);
   const [pressed, setPressed] = useState<string[]>([]);
+  const keys = useRef(new Set<string>());
 
   useEffect(() => {
     if (mode !== "teleop") return;
+    const valid = new Set(["w", "a", "s", "d", "arrowleft", "arrowright", "i", "k", "o", "p", "j", "l", "u", "n", "m"]);
     const onKey = (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
-      if (!["w", "a", "s", "d", "arrowleft", "arrowright", "i", "k", "o", "p", "j", "l", "u", "n", "m"].includes(key)) return;
+      if (!valid.has(key)) return;
       event.preventDefault();
-      setPressed((current) => current.includes(key) ? current : [...current, key]);
-      setTeleop((current) => {
-        let x = current.x;
-        let y = current.y;
-        let heading = current.heading;
-if (key === "w") y = Math.min(5, y + 1);
-    if (key === "s") y = Math.max(0, y - 1);
-        if (key === "a") x = Math.max(0, x - 1);
-        if (key === "d") x = Math.min(5, x + 1);
-        if (key === "arrowleft") heading -= 15;
-        if (key === "arrowright") heading += 15;
-        return { ...current, x, y, heading, arm: key === "i" ? "up" : key === "k" ? "down" : current.arm, claw: key === "o" ? "closed" : key === "p" ? "open" : current.claw, intake: ["j", "u"].includes(key) ? "in" : ["l", "n"].includes(key) ? "out" : key === "m" ? "idle" : current.intake, aim: key === "arrowleft" ? Math.max(-45, current.aim - 5) : key === "arrowright" ? Math.min(45, current.aim + 5) : current.aim, power: key === "i" ? Math.min(100, current.power + 10) : key === "k" ? Math.max(0, current.power - 10) : current.power, holding: ["j", "u"].includes(key) && !current.holding && current.x === 2 && current.y === 3 ? true : current.holding, label: `Teleop: ${event.key}`, note: "WASD drives. Arrows turn and aim. J/U intake, L/N outtake, I/K power." };
-      });
+      keys.current.add(key);
+      setPressed([...keys.current]);
     };
-    const onUp = (event: KeyboardEvent) => setPressed((current) => current.filter((key) => key !== event.key.toLowerCase()));
+    const onUp = (event: KeyboardEvent) => {
+      keys.current.delete(event.key.toLowerCase());
+      setPressed([...keys.current]);
+    };
     window.addEventListener("keydown", onKey);
     window.addEventListener("keyup", onUp);
-    return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("keyup", onUp); };
+    const timer = window.setInterval(() => {
+      setTeleop((current) => {
+        const active = keys.current;
+        const speed = 0.075;
+        const turnSpeed = 2.8;
+        const nextHeading = current.heading + (active.has("arrowright") ? turnSpeed : 0) - (active.has("arrowleft") ? turnSpeed : 0);
+        const headingRad = (nextHeading * Math.PI) / 180;
+        const forward = (active.has("w") ? 1 : 0) - (active.has("s") ? 1 : 0);
+        const strafe = (active.has("d") ? 1 : 0) - (active.has("a") ? 1 : 0);
+        const dx = (Math.sin(headingRad) * forward + Math.cos(headingRad) * strafe) * speed;
+        const dy = (Math.cos(headingRad) * forward - Math.sin(headingRad) * strafe) * speed;
+        const x = Math.max(0.45, Math.min(4.55, current.x + dx));
+        const y = Math.max(0.45, Math.min(4.55, current.y + dy));
+        const intake = active.has("j") || active.has("u") ? "in" : active.has("l") || active.has("n") ? "out" : active.has("m") ? "idle" : current.intake;
+        return { ...current, x, y, heading: nextHeading, arm: active.has("i") ? "up" : active.has("k") ? "down" : current.arm, claw: active.has("o") ? "closed" : active.has("p") ? "open" : current.claw, intake, aim: Math.max(-45, Math.min(45, current.aim + (active.has("arrowright") ? 0.6 : 0) - (active.has("arrowleft") ? 0.6 : 0))), power: Math.max(0, Math.min(100, current.power + (active.has("i") ? 0.5 : 0) - (active.has("k") ? 0.5 : 0))), label: active.size ? `Teleop: ${[...active].join(" + ")}` : current.label, note: "WASD drives continuously with mecanum-style translation. Arrow keys rotate and trim aim. J/U intake, L/N outtake, I/K power." };
+      });
+    }, 16);
+    return () => { window.clearInterval(timer); window.removeEventListener("keydown", onKey); window.removeEventListener("keyup", onUp); keys.current.clear(); };
   }, [mode]);
 
   const reset = () => setTeleop(runProgram("", BIO_LEVEL).frames[0]!);
