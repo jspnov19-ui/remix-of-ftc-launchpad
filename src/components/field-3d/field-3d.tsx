@@ -207,7 +207,7 @@ function GoalZone({ level }: { level: Level }) {
   );
 }
 
-// ── Sample Block ────────────────────────────────────────────
+// ── Sample Block ────────────────────────────────────────��───
 function Samples({ level, taken, variant }: { level: Level; taken: number[]; variant: Variant }) {
   return (
     <>
@@ -386,7 +386,7 @@ function Scene({ frame, level, variant, instant }: { frame: Frame; level: Level;
       <Obstacles level={level} variant={variant} />
       <Samples level={level} taken={frame.taken} variant={variant} />
 
-      <Robot3D frame={frame} instant={instant} />
+      <Robot3D frame={frame} {...(instant === undefined ? {} : { instant })} />
 
       <ContactShadows
         position={[0, 0.01, 0]}
@@ -428,7 +428,7 @@ export function FieldView3D({
       style={{ width: "100%", height: "100%" }}
     >
       <color attach="background" args={[variant === "biobuzz" ? "#10180f" : "#0e0e14"]} />
-      <Scene frame={frame} level={level} variant={variant} instant={instant} />
+      <Scene frame={frame} level={level} variant={variant} {...(instant === undefined ? {} : { instant })} />
     </Canvas>
   );
 }

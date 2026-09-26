@@ -5,6 +5,7 @@ const navItems = [
   { to: "/", label: "Home" },
   { to: "/simulation", label: "Simulation" },
   { to: "/lessons", label: "Lessons" },
+  { to: "/biobuzz", label: "BioBuzz" },
   { to: "/about", label: "About us" },
 ] as const;
 

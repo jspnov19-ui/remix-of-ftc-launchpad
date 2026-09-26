@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { Lightbulb } from "lucide-react";
 import { SimWorkbench } from "@/components/sim-workbench";
 import { MISSIONS } from "@/lib/missions";
 
@@ -70,6 +71,14 @@ function Simulation() {
         </p>
       </section>
 
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {["Driving", "Mechanisms", "Path planning", "Championship"].map((tier) => {
+          const group = MISSIONS.filter((m) => m.tier === tier);
+          const finished = group.filter((m) => done[m.id]).length;
+          return <div key={tier} className="rounded-2xl border border-border bg-white/5 p-4"><div className="flex items-center justify-between"><span className="text-xs font-semibold">{tier}</span><span className="text-[10px] text-muted-foreground">{finished}/{group.length}</span></div><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-accent-teal transition-all" style={{ width: `${group.length ? (finished / group.length) * 100 : 0}%` }} /></div><p className="mt-2 text-[11px] text-muted-foreground">{group.some((m) => m.timeLimit) ? `${Math.min(...group.filter((m) => m.timeLimit).map((m) => m.timeLimit!))}–${Math.max(...group.map((m) => m.timeLimit ?? 0))}s limits` : "Open practice time"}</p></div>;
+        })}
+      </div>
+
       <div className="mb-5 flex flex-wrap gap-2">
         <button
           onClick={() => setSel(-1)}
@@ -122,6 +131,13 @@ function Simulation() {
           </div>
         )}
       </div>
+
+      {mission && (
+        <details className="glass-panel mb-5 rounded-2xl p-4">
+          <summary className="flex cursor-pointer list-none items-center gap-2 font-display text-sm font-semibold"><Lightbulb className="size-4 text-accent-sky" />Need a hint? <span className="ml-auto text-xs text-muted-foreground">Show working program</span></summary>
+          <pre className="mt-3 overflow-x-auto rounded-xl border border-border bg-ink-deep/70 p-4 font-mono text-xs leading-relaxed text-accent-teal">{mission.solution}</pre>
+        </details>
+      )}
 
       {mission ? (
         <SimWorkbench
