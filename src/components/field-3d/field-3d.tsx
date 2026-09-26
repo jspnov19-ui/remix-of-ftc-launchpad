@@ -105,9 +105,9 @@ function PerimeterWalls() {
   const wallT = 0.08;
   const mat = (
     <meshStandardMaterial
-      color="#a0c4e8"
+      color="#11161b"
       transparent
-      opacity={0.25}
+      opacity={0.72}
       metalness={0.1}
       roughness={0.1}
       side={THREE.DoubleSide}
@@ -207,7 +207,7 @@ function GoalZone({ level }: { level: Level }) {
   );
 }
 
-// ── Sample Block ────────────────────────────────────────���───
+// ── Sample Block ─────────────────────────────────────���──���───
 function Samples({ level, taken, variant }: { level: Level; taken: number[]; variant: Variant }) {
   return (
     <>

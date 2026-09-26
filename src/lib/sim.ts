@@ -18,6 +18,9 @@ export type Frame = {
   arm: "down" | "up";
   claw: "open" | "closed";
   holding: boolean;
+  intake: "idle" | "in" | "out";
+  aim: number;
+  power: number;
   score: number;
   label: string;
   note: string;
@@ -76,6 +79,9 @@ const baseFrame: Frame = {
   arm: "down",
   claw: "open",
   holding: false,
+  intake: "idle",
+  aim: 0,
+  power: 0,
   score: 0,
   label: "Robot initialized",
   t: 0,
@@ -207,6 +213,40 @@ export function runProgram(source: string, level: Level = DEMO_LEVEL): Program {
         }
         break;
       }
+      case "intake": {
+        const dir = arg.replace(/[\'\"]/g, "").toLowerCase();
+        if (dir !== "in" && dir !== "out" && dir !== "stop") {
+          errors.push({ line, message: "intake() takes in, out or stop." });
+          return;
+        }
+        next.intake = dir === "stop" ? "idle" : dir;
+        next.t = s.t + 0.4;
+        if (dir === "in" && !s.holding) {
+          const idx = samples.findIndex((p, i) => p.x === s.x && p.y === s.y && !s.taken.includes(i));
+          if (idx >= 0) { next.holding = true; next.taken = [...s.taken, idx]; }
+        }
+        next.label = `intake(${dir})`;
+        next.note = dir === "in" ? (next.holding ? "The intake rollers pull the pollen ball into the robot." : "The intake spins, but there is no pollen ball at this tile.") : dir === "out" ? "The intake rollers reverse to eject the held pollen ball." : "The intake rollers stop.";
+        break;
+      }
+      case "aim": {
+        const deg = Number(arg);
+        if (!Number.isFinite(deg)) { errors.push({ line, message: "aim() needs an angle in degrees." }); return; }
+        next.aim = Math.max(-45, Math.min(45, deg));
+        next.t = s.t + 0.25;
+        next.label = `aim(${deg})`;
+        next.note = `The turret turns ${next.aim}° relative to the chassis to line up the shot.`;
+        break;
+      }
+      case "power": {
+        const value = Number(arg);
+        if (!Number.isFinite(value) || value < 0 || value > 100) { errors.push({ line, message: "power() needs a value from 0 to 100." }); return; }
+        next.power = value;
+        next.t = s.t + 0.2;
+        next.label = `power(${value})`;
+        next.note = `The launcher is set to ${value}% power.`;
+        break;
+      }
       case "score": {
         const inGoal = s.x === GOAL_TILE.x && s.y === GOAL_TILE.y;
         next.label = "score()";
@@ -255,7 +295,10 @@ export const COMMAND_HELP = [
   { code: "drive(2)", what: "Drive forward 2 tiles (negative goes backward)." },
   { code: "turn(90)", what: "Pivot right 90°. turn(-90) pivots left. turn(45) aims diagonally." },
   { code: "arm(up)", what: "Raise or lower the arm: arm(up) / arm(down)." },
+  { code: "intake(in)", what: "Pull a pollen ball in; intake(out) ejects it." },
+  { code: "aim(15)", what: "Turn the launcher 15° for a precise shot." },
+  { code: "power(75)", what: "Set launcher power from 0 to 100%." },
   { code: "claw(close)", what: "Grab or drop: claw(close) / claw(open)." },
-  { code: "score()", what: "Release a held sample. Only scores inside the goal zone." },
+  { code: "score()", what: "Outtake the held ball into the goal zone." },
   { code: "wait(1)", what: "Pause for a second." },
 ];
