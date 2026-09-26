@@ -1,5 +1,5 @@
 import { useRef, useMemo } from "react";
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, ContactShadows } from "@react-three/drei";
 import * as THREE from "three";
 import { FIELD_TILES, levelSamples, type Frame, type Level } from "@/lib/sim";
@@ -207,7 +207,7 @@ function GoalZone({ level }: { level: Level }) {
   );
 }
 
-// ── Sample Block ────────────────────────────────────────��───
+// ── Sample Block ────────────────────────────────────────���───
 function Samples({ level, taken, variant }: { level: Level; taken: number[]; variant: Variant }) {
   return (
     <>
@@ -351,6 +351,58 @@ function SampleBlock({ x, y }: { x: number; y: number }) {
   );
 }
 
+// ── BioBuzz central Hive and field pieces ───────────────────
+function Hive() {
+  const wheel = useRef<THREE.Group>(null!);
+  useFrame((_, dt) => {
+    if (wheel.current) wheel.current.rotation.z += dt * 0.45;
+  });
+  const baskets = Array.from({ length: 10 }, (_, i) => {
+    const a = (i / 10) * Math.PI * 2;
+    return { a, color: i % 2 ? "#d93645" : "#3b6fde" };
+  });
+  return (
+    <group position={[0, 1.15, 0]}>
+      <mesh position={[0, -0.5, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+        <cylinderGeometry args={[0.18, 0.18, 3.1, 20]} />
+        <meshStandardMaterial color="#aeb5ba" metalness={0.9} roughness={0.28} />
+      </mesh>
+      <group ref={wheel} rotation={[0, Math.PI / 2, 0]}>
+        <mesh rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[1.45, 0.09, 12, 48]} />
+          <meshStandardMaterial color="#d1d6da" metalness={0.85} roughness={0.3} />
+        </mesh>
+        {Array.from({ length: 10 }, (_, i) => {
+          const a = (i / 10) * Math.PI * 2;
+          return <mesh key={i} rotation={[0, 0, a]}><boxGeometry args={[0.06, 2.9, 0.06]} /><meshStandardMaterial color="#aeb5ba" metalness={0.8} /></mesh>;
+        })}
+        {baskets.map(({ a, color }, i) => (
+          <group key={i} position={[Math.cos(a) * 1.45, Math.sin(a) * 1.45, 0]}>
+            <mesh castShadow><boxGeometry args={[0.32, 0.42, 0.28]} /><meshStandardMaterial color={color} metalness={0.25} roughness={0.55} /></mesh>
+            <mesh position={[0, 0.24, 0]}><torusGeometry args={[0.14, 0.025, 8, 18]} /><meshStandardMaterial color="#f2c94c" metalness={0.6} /></mesh>
+          </group>
+        ))}
+      </group>
+      {[-1, 1].map((x) => <mesh key={x} position={[x * 0.72, -0.6, 0]} rotation={[0, 0, x * 0.45]} castShadow><boxGeometry args={[0.12, 1.8, 0.12]} /><meshStandardMaterial color="#b9c0c4" metalness={0.85} roughness={0.3} /></mesh>)}
+      <mesh position={[0, 0.05, 0]}><cylinderGeometry args={[0.28, 0.28, 0.12, 24]} /><meshStandardMaterial color="#e0a526" metalness={0.45} /></mesh>
+    </group>
+  );
+}
+
+function CornerTubes() {
+  const spots = [[-5.25, -5.25], [5.25, -5.25], [-5.25, 5.25], [5.25, 5.25]] as const;
+  return <group>{spots.map(([x, z], i) => <group key={i} position={[x, 0, z]}>
+    <mesh position={[0, 0.9, 0]} castShadow><cylinderGeometry args={[0.24, 0.24, 1.8, 20]} /><meshStandardMaterial color="#3e8f54" metalness={0.25} roughness={0.6} /></mesh>
+    <mesh position={[0, 1.35, 0]}><cylinderGeometry args={[0.17, 0.17, 0.95, 20]} /><meshStandardMaterial color="#dff6e7" transparent opacity={0.28} roughness={0.12} /></mesh>
+    {Array.from({ length: 4 }, (_, j) => <mesh key={j} position={[0, 1.05 + j * 0.2, 0]}><sphereGeometry args={[0.11, 14, 10]} /><meshStandardMaterial color="#f5c542" emissive="#a76d00" emissiveIntensity={0.18} /></mesh>)}
+  </group>)}</group>;
+}
+
+function BioBuzzPieces() {
+  const pieces = Array.from({ length: 16 }, (_, i) => ({ x: -4.7 + (i % 8) * 1.35, z: i < 8 ? 5.15 : -5.15 }));
+  return <group>{pieces.map((p, i) => <mesh key={i} position={[p.x, 0.17, p.z]} castShadow><sphereGeometry args={[0.16, 16, 12]} /><meshStandardMaterial color="#f5c542" roughness={0.7} /></mesh>)}</group>;
+}
+
 // ── Scene ───────────────────────────────────────────────────
 type Variant = "ftc" | "biobuzz";
 function Scene({ frame, level, variant, instant }: { frame: Frame; level: Level; variant: Variant; instant?: boolean }) {
@@ -375,6 +427,9 @@ function Scene({ frame, level, variant, instant }: { frame: Frame; level: Level;
       <StartingBox level={level} />
       {variant === "biobuzz" ? (
         <>
+          <Hive />
+          <CornerTubes />
+          <BioBuzzPieces />
           <NectarBox level={level} />
           {FLOWER_SPOTS.map(([x, z, c], i) => (
             <Flower key={i} x={x} z={z} color={c} />
