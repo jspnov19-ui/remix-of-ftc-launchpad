@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls, ContactShadows } from "@react-three/drei";
+import { OrbitControls, ContactShadows, useGLTF } from "@react-three/drei";
+import { Physics, RigidBody, CuboidCollider } from "@react-three/rapier";
 import * as THREE from "three";
 import { FIELD_TILES, levelSamples, type Frame, type Level } from "@/lib/sim";
 import { Robot3D } from "./robot-3d";
@@ -33,12 +34,7 @@ function FieldTiles() {
   return (
     <group>
       {tiles.map((t, i) => (
-        <mesh
-          key={i}
-          position={[t.x, 0, t.z]}
-          rotation={[-Math.PI / 2, 0, 0]}
-          receiveShadow
-        >
+        <mesh key={i} position={[t.x, 0, t.z]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
           <planeGeometry args={[TILE, TILE]} />
           <meshStandardMaterial
             color={t.alt ? "#6b6b73" : "#62626a"}
@@ -162,12 +158,7 @@ function StartingBox({ level }: { level: Level }) {
   return (
     <mesh position={[wx, 0.003, wz]} rotation={[-Math.PI / 2, 0, 0]}>
       <planeGeometry args={[TILE * 0.85, TILE * 0.85]} />
-      <meshBasicMaterial
-        color="white"
-        transparent
-        opacity={0.08}
-        side={THREE.DoubleSide}
-      />
+      <meshBasicMaterial color="white" transparent opacity={0.08} side={THREE.DoubleSide} />
     </mesh>
   );
 }
@@ -255,7 +246,10 @@ function Obstacles({ level, variant }: { level: Level; variant: Variant }) {
           <group key={i} position={[wx, 0, wz]}>
             <mesh position={[0, 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]}>
               <planeGeometry args={[TILE * 0.96, TILE * 0.96]} />
-              <meshStandardMaterial color={variant === "biobuzz" ? "#7a4a1f" : "#8a1c1c"} roughness={0.9} />
+              <meshStandardMaterial
+                color={variant === "biobuzz" ? "#7a4a1f" : "#8a1c1c"}
+                roughness={0.9}
+              />
             </mesh>
             {[-0.5, 0.5].map((dx) =>
               [-0.5, 0.5].map((dz) => (
@@ -274,9 +268,16 @@ function Obstacles({ level, variant }: { level: Level; variant: Variant }) {
 
 // ── BioBuzz decorations: flowers + nectar box ──
 const FLOWER_SPOTS: [number, number, string][] = [
-  [-5.5, -5.5, "#ff5d8f"], [5.5, -5.5, "#ffd23f"], [-5.5, 5.5, "#a06cd5"], [5.5, 5.5, "#ff8c42"],
-  [-5.6, -1.2, "#4cc9f0"], [5.6, 1.4, "#f72585"], [-1.4, 5.6, "#ffd23f"], [1.6, -5.6, "#ff5d8f"],
-  [-5.6, 2.5, "#ff8c42"], [5.6, -3, "#a06cd5"],
+  [-5.5, -5.5, "#ff5d8f"],
+  [5.5, -5.5, "#ffd23f"],
+  [-5.5, 5.5, "#a06cd5"],
+  [5.5, 5.5, "#ff8c42"],
+  [-5.6, -1.2, "#4cc9f0"],
+  [5.6, 1.4, "#f72585"],
+  [-1.4, 5.6, "#ffd23f"],
+  [1.6, -5.6, "#ff5d8f"],
+  [-5.6, 2.5, "#ff8c42"],
+  [5.6, -3, "#a06cd5"],
 ];
 function Flower({ x, z, color }: { x: number; z: number; color: string }) {
   return (
@@ -292,7 +293,12 @@ function Flower({ x, z, color }: { x: number; z: number; color: string }) {
       {Array.from({ length: 6 }).map((_, k) => {
         const a = (k / 6) * Math.PI * 2;
         return (
-          <mesh key={k} position={[Math.cos(a) * 0.13, 0.62, Math.sin(a) * 0.13]} scale={[1, 0.35, 1]} castShadow>
+          <mesh
+            key={k}
+            position={[Math.cos(a) * 0.13, 0.62, Math.sin(a) * 0.13]}
+            scale={[1, 0.35, 1]}
+            castShadow
+          >
             <sphereGeometry args={[0.1, 12, 8]} />
             <meshStandardMaterial color={color} roughness={0.6} />
           </mesh>
@@ -314,7 +320,12 @@ function NectarBox({ level }: { level: Level }) {
         <planeGeometry args={[TILE * 0.92, TILE * 0.92]} />
         <meshStandardMaterial color="#f2a900" transparent opacity={0.3} />
       </mesh>
-      {[[0.6, 0], [-0.6, 0], [0, 0.6], [0, -0.6]].map(([dx, dz], k) => (
+      {[
+        [0.6, 0],
+        [-0.6, 0],
+        [0, 0.6],
+        [0, -0.6],
+      ].map(([dx, dz], k) => (
         <mesh key={k} position={[dx!, 0.15, dz!]} castShadow>
           <boxGeometry args={[dx ? 0.06 : 1.26, 0.3, dx ? 1.26 : 0.06]} />
           <meshStandardMaterial color="#e0a526" metalness={0.2} roughness={0.5} />
@@ -322,7 +333,12 @@ function NectarBox({ level }: { level: Level }) {
       ))}
       <mesh position={[0, 0.06, 0]}>
         <cylinderGeometry args={[0.4, 0.4, 0.1, 6]} />
-        <meshStandardMaterial color="#ffb703" emissive="#ff9e00" emissiveIntensity={0.3} roughness={0.2} />
+        <meshStandardMaterial
+          color="#ffb703"
+          emissive="#ff9e00"
+          emissiveIntensity={0.3}
+          roughness={0.2}
+        />
       </mesh>
     </group>
   );
@@ -368,7 +384,11 @@ function CentralScoringStructure() {
           </mesh>
           <mesh position={[0, 1.12, 0]} rotation={[Math.PI / 2, 0, 0]}>
             <torusGeometry args={[0.48, 0.07, 10, 20]} />
-            <meshStandardMaterial color={side < 0 ? "#3157c9" : "#d93645"} metalness={0.5} roughness={0.35} />
+            <meshStandardMaterial
+              color={side < 0 ? "#3157c9" : "#d93645"}
+              metalness={0.5}
+              roughness={0.35}
+            />
           </mesh>
           <mesh position={[0, 1.08, 0]}>
             <cylinderGeometry args={[0.38, 0.38, 0.04, 20]} />
@@ -385,24 +405,108 @@ function CentralScoringStructure() {
 }
 
 function CornerTubes() {
-  const spots = [[-5.25, -5.25], [5.25, -5.25], [-5.25, 5.25], [5.25, 5.25]] as const;
-  return <group>{spots.map(([x, z], i) => <group key={i} position={[x, 0, z]}>
-    <mesh position={[0, 0.9, 0]} castShadow><cylinderGeometry args={[0.24, 0.24, 1.8, 20]} /><meshStandardMaterial color="#3e8f54" metalness={0.25} roughness={0.6} /></mesh>
-    <mesh position={[0, 1.35, 0]}><cylinderGeometry args={[0.17, 0.17, 0.95, 20]} /><meshStandardMaterial color="#dff6e7" transparent opacity={0.28} roughness={0.12} /></mesh>
-    {Array.from({ length: 4 }, (_, j) => <mesh key={j} position={[0, 1.05 + j * 0.2, 0]}><sphereGeometry args={[0.11, 14, 10]} /><meshStandardMaterial color="#f5c542" emissive="#a76d00" emissiveIntensity={0.18} /></mesh>)}
-  </group>)}</group>;
+  const spots = [
+    [-5.25, -5.25],
+    [5.25, -5.25],
+    [-5.25, 5.25],
+    [5.25, 5.25],
+  ] as const;
+  return (
+    <group>
+      {spots.map(([x, z], i) => (
+        <group key={i} position={[x, 0, z]}>
+          <mesh position={[0, 0.9, 0]} castShadow>
+            <cylinderGeometry args={[0.24, 0.24, 1.8, 20]} />
+            <meshStandardMaterial color="#3e8f54" metalness={0.25} roughness={0.6} />
+          </mesh>
+          <mesh position={[0, 1.35, 0]}>
+            <cylinderGeometry args={[0.17, 0.17, 0.95, 20]} />
+            <meshStandardMaterial color="#dff6e7" transparent opacity={0.28} roughness={0.12} />
+          </mesh>
+          {Array.from({ length: 4 }, (_, j) => (
+            <mesh key={j} position={[0, 1.05 + j * 0.2, 0]}>
+              <sphereGeometry args={[0.11, 14, 10]} />
+              <meshStandardMaterial color="#f5c542" emissive="#a76d00" emissiveIntensity={0.18} />
+            </mesh>
+          ))}
+        </group>
+      ))}
+    </group>
+  );
 }
 
 function BioBuzzPieces() {
-  const pieces = Array.from({ length: 16 }, (_, i) => ({ x: -4.7 + (i % 8) * 1.35, z: i < 8 ? 5.15 : -5.15 }));
-  return <group>{pieces.map((p, i) => <mesh key={i} position={[p.x, 0.17, p.z]} castShadow><sphereGeometry args={[0.16, 16, 12]} /><meshStandardMaterial color="#f5c542" roughness={0.7} /></mesh>)}</group>;
+  const pieces = Array.from({ length: 16 }, (_, i) => ({
+    x: -4.7 + (i % 8) * 1.35,
+    z: i < 8 ? 5.15 : -5.15,
+  }));
+  return (
+    <group>
+      {pieces.map((p, i) => (
+        <mesh key={i} position={[p.x, 0.17, p.z]} castShadow>
+          <sphereGeometry args={[0.16, 16, 12]} />
+          <meshStandardMaterial color="#f5c542" roughness={0.7} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+// The production BioBuzz field is authored at the official 12' x 12' footprint.
+// Keep this path literal so the public asset can be swapped without changing scene code.
+const BIOBUZZ_FIELD_ASSET = "/BIOBUZZ-v1-v1.glb";
+
+function BioBuzzFieldAsset() {
+  const { scene } = useGLTF(BIOBUZZ_FIELD_ASSET);
+  return (
+    <RigidBody type="fixed" colliders="trimesh" friction={0.8} restitution={0.05}>
+      <primitive object={scene} position={[0, 0, 0]} scale={1} />
+    </RigidBody>
+  );
+}
+
+function StaticFieldColliders() {
+  const wall = 6.12;
+  return (
+    <RigidBody type="fixed" colliders={false} friction={0.9} restitution={0.05}>
+      <Collider position={[0, 0.42, -wall]} args={[6.12, 0.42, 0.08]} />
+      <Collider position={[0, 0.42, wall]} args={[6.12, 0.42, 0.08]} />
+      <Collider position={[-wall, 0.42, 0]} args={[0.08, 0.42, 6.12]} />
+      <Collider position={[wall, 0.42, 0]} args={[0.08, 0.42, 6.12]} />
+      <Collider position={[0, 0.7, 0]} args={[0.12, 0.7, 0.12]} />
+      <Collider position={[-0.72, 1.35, 0]} rotation={[0, 0, -0.28]} args={[0.08, 1.15, 0.08]} />
+      <Collider position={[0.72, 1.35, 0]} rotation={[0, 0, 0.28]} args={[0.08, 1.15, 0.08]} />
+    </RigidBody>
+  );
+}
+
+function Collider({
+  position,
+  rotation,
+  args,
+}: {
+  position: [number, number, number];
+  rotation?: [number, number, number];
+  args: [number, number, number];
+}) {
+  return <CuboidCollider position={position} rotation={rotation} args={args} />;
 }
 
 // ── Scene ───────────────────────────────────────────────────
 type Variant = "ftc" | "biobuzz";
-function Scene({ frame, level, variant, instant }: { frame: Frame; level: Level; variant: Variant; instant?: boolean }) {
+function Scene({
+  frame,
+  level,
+  variant,
+  instant,
+}: {
+  frame: Frame;
+  level: Level;
+  variant: Variant;
+  instant?: boolean;
+}) {
   return (
-    <>
+    <Physics gravity={[0, -9.81, 0]}>
       <ambientLight intensity={0.45} />
       <directionalLight
         position={[6, 10, 4]}
@@ -416,19 +520,20 @@ function Scene({ frame, level, variant, instant }: { frame: Frame; level: Level;
       />
       <directionalLight position={[-4, 6, -4]} intensity={0.3} />
 
-      <FieldTiles />
-      <AllianceBorders />
-      <PerimeterWalls />
-      <StartingBox level={level} />
       {variant === "biobuzz" ? (
         <>
-          <CentralScoringStructure />
-          <CornerTubes />
+          <BioBuzzFieldAsset />
+          <StaticFieldColliders />
           <BioBuzzPieces />
-          <NectarBox level={level} />
         </>
       ) : (
-        <GoalZone level={level} />
+        <>
+          <FieldTiles />
+          <AllianceBorders />
+          <PerimeterWalls />
+          <StartingBox level={level} />
+          <GoalZone level={level} />
+        </>
       )}
       <Obstacles level={level} variant={variant} />
       <Samples level={level} taken={frame.taken} variant={variant} />
@@ -450,7 +555,7 @@ function Scene({ frame, level, variant, instant }: { frame: Frame; level: Level;
         maxPolarAngle={Math.PI / 2.1}
         target={[0, 0, 0]}
       />
-    </>
+    </Physics>
   );
 }
 
@@ -475,7 +580,12 @@ export function FieldView3D({
       style={{ width: "100%", height: "100%" }}
     >
       <color attach="background" args={[variant === "biobuzz" ? "#10180f" : "#0e0e14"]} />
-      <Scene frame={frame} level={level} variant={variant} {...(instant === undefined ? {} : { instant })} />
+      <Scene
+        frame={frame}
+        level={level}
+        variant={variant}
+        {...(instant === undefined ? {} : { instant })}
+      />
     </Canvas>
   );
 }
