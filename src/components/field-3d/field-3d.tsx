@@ -1,6 +1,6 @@
-import { useMemo } from "react";
+import { Suspense, useMemo } from "react";
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls, ContactShadows } from "@react-three/drei";
+import { OrbitControls, ContactShadows, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import { FIELD_TILES, levelSamples, type Frame, type Level } from "@/lib/sim";
 import { Robot3D } from "./robot-3d";
@@ -400,7 +400,44 @@ function BioBuzzPieces() {
 
 // ── Scene ───────────────────────────────────────────────────
 type Variant = "ftc" | "biobuzz";
-function Scene({ frame, level, variant, instant }: { frame: Frame; level: Level; variant: Variant; instant?: boolean }) {
+// ── Official BioBuzz field model (public/BIOBUZZ-v1-v1.glb), scaled to fit the field box ──
+const FIELD_GLB = "/BIOBUZZ-v1-v1.glb";
+function BioBuzzFieldModel() {
+  const { scene } = useGLTF(FIELD_GLB);
+  const model = useMemo(() => {
+    const root = scene.clone(true);
+    const box = new THREE.Box3().setFromObject(root);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    const scale = FIELD_SIZE / Math.max(size.x, size.z, 1e-6);
+    root.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
+    root.scale.setScalar(scale);
+    root.traverse((o) => {
+      if ((o as THREE.Mesh).isMesh) { o.castShadow = true; o.receiveShadow = true; }
+    });
+    return root;
+  }, [scene]);
+  return <primitive object={model} />;
+}
+
+export type FieldBall = { id: number; x: number; y: number; h: number };
+function Balls({ balls }: { balls: FieldBall[] }) {
+  return (
+    <>
+      {balls.map((b) => {
+        const [wx, wz] = gridToWorld(b.x, b.y);
+        return (
+          <mesh key={b.id} position={[wx, 0.14 + b.h * TILE, wz]} castShadow>
+            <sphereGeometry args={[0.14, 20, 16]} />
+            <meshStandardMaterial color="#ffd23f" roughness={0.6} emissive="#8a6a00" emissiveIntensity={0.25} />
+          </mesh>
+        );
+      })}
+    </>
+  );
+}
+
+function Scene({ frame, level, variant, instant, balls }: { frame: Frame; level: Level; variant: Variant; instant?: boolean; balls?: FieldBall[] }) {
   return (
     <>
       <ambientLight intensity={0.45} />
@@ -416,22 +453,33 @@ function Scene({ frame, level, variant, instant }: { frame: Frame; level: Level;
       />
       <directionalLight position={[-4, 6, -4]} intensity={0.3} />
 
-      <FieldTiles />
-      <AllianceBorders />
-      <PerimeterWalls />
-      <StartingBox level={level} />
-      {variant === "biobuzz" ? (
+      {balls ? (
         <>
-          <CentralScoringStructure />
-          <CornerTubes />
-          <BioBuzzPieces />
-          <NectarBox level={level} />
+          <Suspense fallback={<FieldTiles />}>
+            <BioBuzzFieldModel />
+          </Suspense>
+          <Balls balls={balls} />
         </>
       ) : (
-        <GoalZone level={level} />
+        <>
+          <FieldTiles />
+          <AllianceBorders />
+          <PerimeterWalls />
+          <StartingBox level={level} />
+          {variant === "biobuzz" ? (
+            <>
+              <CentralScoringStructure />
+              <CornerTubes />
+              <BioBuzzPieces />
+              <NectarBox level={level} />
+            </>
+          ) : (
+            <GoalZone level={level} />
+          )}
+          <Obstacles level={level} variant={variant} />
+          <Samples level={level} taken={frame.taken} variant={variant} />
+        </>
       )}
-      <Obstacles level={level} variant={variant} />
-      <Samples level={level} taken={frame.taken} variant={variant} />
 
       <Robot3D frame={frame} {...(instant === undefined ? {} : { instant })} />
 
@@ -460,11 +508,14 @@ export function FieldView3D({
   level,
   variant = "ftc",
   instant,
+  balls,
 }: {
   frame: Frame;
   level: Level;
   variant?: Variant;
   instant?: boolean;
+  /** When provided (BioBuzz teleop), render the official field model + live game pieces. */
+  balls?: FieldBall[];
 }) {
   return (
     <Canvas
@@ -475,7 +526,7 @@ export function FieldView3D({
       style={{ width: "100%", height: "100%" }}
     >
       <color attach="background" args={[variant === "biobuzz" ? "#10180f" : "#0e0e14"]} />
-      <Scene frame={frame} level={level} variant={variant} {...(instant === undefined ? {} : { instant })} />
+      <Scene frame={frame} level={level} variant={variant} {...(instant === undefined ? {} : { instant })} {...(balls ? { balls } : {})} />
     </Canvas>
   );
 }
