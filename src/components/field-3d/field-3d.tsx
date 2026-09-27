@@ -13,6 +13,107 @@ function gridToWorld(x: number, y: number): [number, number] {
   const wz = y * TILE + TILE / 2 - FIELD_SIZE / 2;
   return [wx, -wz];
 }
+// ── Hive weight-tipping physics ──────────────────────────────────────
+// Update this to match the real node/mesh name(s) inside BIOBUZZ-v1-v1.glb
+// for the moving balance beam + basket assembly. If nothing matches, a DEV
+// console.warn below dumps every node name in the file so you can copy the
+// right one in.
+const HIVE_NODE_PATTERN = /hive|balance[-_]?beam|tipp?er|counterweight/i;
+
+export const HIVE_TILT_THRESHOLD = 3; // net ball advantage before it starts tipping
+const HIVE_MAX_TILT = (25 * Math.PI) / 180; // realistic tilt limit, ~20–30°
+const HIVE_SPRING_K = 14; // spring stiffness — soft enough to overshoot/bounce
+const HIVE_SPRING_C = 3.2; // damping — settles instead of oscillating forever
+const HIVE_TIP_ARM_RATIO = 0.97; // fraction of max tilt counted as "tipped"
+const HIVE_REARM_RATIO = 0.5; // must fall back under this fraction to rearm
+
+/**
+ * Walks the loaded CAD scene, pulls every node matching HIVE_NODE_PATTERN out
+ * from under its original parent(s), and re-parents them under one pivot
+ * Group anchored at the high-center axis of that geometry (top of the black
+ * tower frame). Rotating that pivot Group == physically tipping the assembly.
+ * `Group.attach()` preserves each child's world transform during the move,
+ * so nothing visually jumps when it's reparented.
+ */
+function isolateHiveMovingGroup(root: THREE.Object3D): THREE.Group | null {
+  const matches: THREE.Object3D[] = [];
+  root.traverse((node) => {
+    if (HIVE_NODE_PATTERN.test(node.name)) matches.push(node);
+  });
+
+  if (matches.length === 0) {
+    if (import.meta.env.DEV) {
+      const names: string[] = [];
+      root.traverse((n) => names.push(n.name || "(unnamed)"));
+      console.warn(
+        "[BioBuzz] No node in BIOBUZZ-v1-v1.glb matched HIVE_NODE_PATTERN — " +
+          "the hive will not tip. Update the pattern in field-3d.tsx to one of these node names:",
+        names,
+      );
+    }
+    return null;
+  }
+
+  const box = new THREE.Box3();
+  matches.forEach((m) => box.expandByObject(m));
+  const center = box.getCenter(new THREE.Vector3());
+  const pivotWorldPos = new THREE.Vector3(center.x, box.max.y, center.z); // high center axis of the tower
+
+  const pivot = new THREE.Group();
+  pivot.name = "hiveMovingGroup";
+  root.add(pivot);
+  pivot.position.copy(pivotWorldPos);
+  pivot.updateMatrixWorld(true);
+  matches.forEach((m) => pivot.attach(m));
+
+  return pivot;
+}
+
+/**
+ * Drives the hive pivot group's Z rotation from the red/blue ball mass
+ * differential using a spring-damper (never an instant snap), and fires
+ * onTip exactly once at the frame the tilt limit is crossed.
+ */
+function HiveTiltRig({
+  groupRef,
+  redCount,
+  blueCount,
+  onTip,
+}: {
+  groupRef: React.MutableRefObject<THREE.Group | null>;
+  redCount: number;
+  blueCount: number;
+  onTip?: (side: "red" | "blue") => void;
+}) {
+  const angle = useRef(0);
+  const velocity = useRef(0);
+  const tipped = useRef(false);
+
+  useFrame((_, dt) => {
+    const deltaMass = redCount - blueCount;
+    const beyondThreshold = Math.abs(deltaMass) >= HIVE_TILT_THRESHOLD;
+    // Positive deltaMass (red heavier) tips toward +Z; negative (blue heavier) toward -Z.
+    const target = beyondThreshold ? Math.sign(deltaMass) * HIVE_MAX_TILT : 0;
+
+    // Spring-damper torque: accel = k*(target - angle) - c*velocity.
+    const accel = HIVE_SPRING_K * (target - angle.current) - HIVE_SPRING_C * velocity.current;
+    velocity.current += accel * dt;
+    angle.current += velocity.current * dt;
+
+    if (groupRef.current) groupRef.current.rotation.z = angle.current;
+
+    const tiltMagnitude = Math.abs(angle.current);
+    if (!tipped.current && tiltMagnitude >= HIVE_MAX_TILT * HIVE_TIP_ARM_RATIO) {
+      tipped.current = true;
+      onTip?.(angle.current > 0 ? "red" : "blue");
+    } else if (tipped.current && tiltMagnitude < HIVE_MAX_TILT * HIVE_REARM_RATIO) {
+      tipped.current = false; // rearm so a future crossing can score again
+    }
+  });
+
+  return null;
+}
+
 
 // ── Foam Field Tiles ────────────────────────────────────────
 function FieldTiles() {
@@ -425,7 +526,8 @@ function BioBuzzPieces() {
 type Variant = "ftc" | "biobuzz";
 // ── Official BioBuzz field model (public/BIOBUZZ-v1-v1.glb), scaled to fit the field box ──
 const FIELD_GLB = "/BIOBUZZ-v1-v1.glb";
-function BioBuzzFieldModel() {
+function BioBuzzFieldModel({ hiveMovingGroupRef }: { hiveMovingGroupRef: React.MutableRefObject<THREE.Group | null> }) {
+
   const { scene } = useGLTF(FIELD_GLB);
   const model = useMemo(() => {
     const root = scene.clone(true);
@@ -440,6 +542,14 @@ function BioBuzzFieldModel() {
     });
     return root;
   }, [scene]);
+
+  useEffect(() => {
+    hiveMovingGroupRef.current = isolateHiveMovingGroup(model);
+    return () => {
+      hiveMovingGroupRef.current = null;
+    };
+  }, [model, hiveMovingGroupRef]);
+
   return <primitive object={model} />;
 }
 
@@ -460,8 +570,30 @@ function Balls({ balls }: { balls: FieldBall[] }) {
   );
 }
 
+function Scene({
+  frame,
+  level,
+  variant,
+  instant,
+  balls,
+  liveBalls,
+  redCount = 0,
+  blueCount = 0,
+  onHiveTip,
+}: {
+  frame: Frame;
+  level: Level;
+  variant: Variant;
+  instant?: boolean;
+  balls?: FieldBall[];
+  liveBalls?: FieldBall[];
+  redCount?: number;
+  blueCount?: number;
+  onHiveTip?: (side: "red" | "blue") => void;
+}) {
+  const hiveMovingGroupRef = useRef<THREE.Group | null>(null);
+  const useCadField = variant === "biobuzz"; // BioBuzz always renders the real field CAD now
 
-function Scene({ frame, level, variant, instant, balls, liveBalls, scorePulse }: { frame: Frame; level: Level; variant: Variant; instant?: boolean; balls?: FieldBall[]; liveBalls?: FieldBall[]; scorePulse?: number }) {
   return (
     <>
       <ambientLight intensity={0.45} />
@@ -477,12 +609,14 @@ function Scene({ frame, level, variant, instant, balls, liveBalls, scorePulse }:
       />
       <directionalLight position={[-4, 6, -4]} intensity={0.3} />
 
-      {balls ? (
+      {useCadField || balls ? (
         <>
           <Suspense fallback={<FieldTiles />}>
-            <BioBuzzFieldModel />
+            <BioBuzzFieldModel hiveMovingGroupRef={hiveMovingGroupRef} />
+
           </Suspense>
-          <Balls balls={balls} />
+          <HiveTiltRig groupRef={hiveMovingGroupRef} redCount={redCount} blueCount={blueCount} onTip={onHiveTip} />
+          {(liveBalls ?? balls) && <Balls balls={(liveBalls ?? balls)!} />}
         </>
       ) : (
         <>
@@ -491,18 +625,9 @@ function Scene({ frame, level, variant, instant, balls, liveBalls, scorePulse }:
           <PerimeterWalls />
           <StartingBox level={level} />
           
-           {variant === "biobuzz" ? (
-             <>
-               <CentralScoringStructure scorePulse={scorePulse} />
-               <CornerTubes />
-               <BioBuzzPieces />
-               <NectarBox level={level} />
-             </>
-           ) : (
-             <GoalZone level={level} />
-           )}
+          <GoalZone level={level} />
            <Obstacles level={level} variant={variant} />
-           {liveBalls ? <Balls balls={liveBalls} /> : <Samples level={level} taken={frame.taken} variant={variant} />}
+          <Samples level={level} taken={frame.taken} variant={variant} />
         </>
       )}
 
@@ -535,7 +660,9 @@ function Scene({ frame, level, variant, instant, balls, liveBalls, scorePulse }:
    instant,
    balls,
   liveBalls,
-  scorePulse,
+  redCount,
+  blueCount,
+  onHiveTip,
  }: {
    frame: Frame;
    level: Level;
@@ -546,8 +673,12 @@ function Scene({ frame, level, variant, instant, balls, liveBalls, scorePulse }:
   /** Live pollen balls (physics state) to render as spheres on the schematic biobuzz field. */
   liveBalls?: FieldBall[];
   /** Increment this on every successful hive score to trigger the rocking animation. */
-  scorePulse?: number;
- }) {
+  /** Balls scored on the red side of the hive — drives weight-tipping physics. */
+  redCount?: number;
+  /** Balls scored on the blue side of the hive — drives weight-tipping physics. */
+  blueCount?: number;
+  /** Fires once, at the exact frame the hive crosses its max tilt angle. */
++  onHiveTip?: (side: "red" | "blue") => void; }) {
    return (
      <Canvas
        shadows
@@ -564,8 +695,9 @@ function Scene({ frame, level, variant, instant, balls, liveBalls, scorePulse }:
         {...(instant === undefined ? {} : { instant })}
         {...(balls ? { balls } : {})}
         {...(liveBalls ? { liveBalls } : {})}
-        {...(scorePulse !== undefined ? { scorePulse } : {})}
-      />
+        redCount={redCount ?? 0}
+        blueCount={blueCount ?? 0}
+        {...(onHiveTip ? { onHiveTip } : {})}      />
      </Canvas>
    );
  }
