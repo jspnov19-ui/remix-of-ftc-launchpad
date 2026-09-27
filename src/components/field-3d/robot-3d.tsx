@@ -7,11 +7,14 @@ import type { Frame } from "@/lib/sim";
 // Field is 6×6 tiles, each tile = 24" (0.6096 m). We use 1 tile = 2 units.
 const TILE = 2;
 const FIELD_SIZE = 6 * TILE; // 12 units
+// Global multiplier to adjust robot dimensions dynamically
+const SCALE_FACTOR = 0.60; 
 
-// Robot is 18" → 18/24 * 2 = 1.5 units per side
-const ROBOT_HALF = 0.75;
-const WHEEL_R = 0.16;
-const WHEEL_W = 0.12;
+// Robot dimensions scaled down proportionally
+const ROBOT_HALF = 0.75 * SCALE_FACTOR;
+const WHEEL_R = 0.16 * SCALE_FACTOR;
+const WHEEL_W = 0.12 * SCALE_FACTOR;
+
 
 // Arm angles: the arm is modeled pointing straight up (+y) at rotation 0.
 // "up" = vertical; "down" = rotated forward until it lies flat toward the ground.
