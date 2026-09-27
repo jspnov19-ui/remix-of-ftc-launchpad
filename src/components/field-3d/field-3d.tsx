@@ -212,7 +212,7 @@ function Samples({ level, taken, variant }: { level: Level; taken: number[]; var
   return (
     <>
       {levelSamples(level).map((p, i) =>
-        taken.includes(i) ? null : variant === "biobuzz" ? (
+        (taken ?? []).includes(i) ? null : variant === "biobuzz" ? (
           <Pollen key={i} x={p.x} y={p.y} i={i} />
         ) : (
           <SampleBlock key={i} x={p.x} y={p.y} />
