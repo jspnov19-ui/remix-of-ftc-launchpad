@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { Bug, Gamepad2, Keyboard, Sparkles, Target, Zap } from "lucide-react";
-import { FieldView3D } from "@/components/field-3d/field-3d";
+import { FieldView3D, HIVE_TILT_THRESHOLD } from "@/components/field-3d/field-3d";
 import { SimWorkbench } from "@/components/sim-workbench";
 import { FIELD_TILES, runProgram, type Frame, type Level } from "@/lib/sim";
 
@@ -35,15 +35,26 @@ let ballId = 0;
 const floorBall = (x: number, y: number): Ball => ({ id: ballId++, x, y, h: 0, vx: 0, vy: 0, vh: 0, flying: false });
 const starterBalls = () => [floorBall(1, 3), floorBall(4, 4), floorBall(0.5, 1.5)];
 
-function BioBuzz() {
-  const [mode, setMode] = useState<"teleop" | "autonomous">("teleop");
-  const [teleop, setTeleop] = useState<Frame>(initialFrame);
-  const [balls, setBalls] = useState<Ball[]>(starterBalls);
-  const [inv, setInv] = useState(0);
-  const ballsRef = useRef<Ball[]>(balls);
-  const invRef = useRef(0);
-  const frameRef = useRef<Frame>(teleop);
-  const powerRef = useRef(60);
+// Placeholder values — swap in FIRST's official 2026-27 BioBuzz scoring table
+// once it's published.
+const SCORE = { hiveTip: 20 };
+
+ function BioBuzz() {
+   const [mode, setMode] = useState<"teleop" | "autonomous">("teleop");
+   const [teleop, setTeleop] = useState<Frame>(initialFrame);
+   const [balls, setBalls] = useState<Ball[]>(starterBalls);
+   const [inv, setInv] = useState(0);
+  const [alliance, setAlliance] = useState<"red" | "blue">("blue");
+  const [redCount, setRedCount] = useState(0);
+  const [blueCount, setBlueCount] = useState(0);
+   const ballsRef = useRef<Ball[]>(balls);
+   const invRef = useRef(0);
+   const frameRef = useRef<Frame>(teleop);
+   const powerRef = useRef(60);
+  const outtakeUntilRef = useRef(0);
+  const redCountRef = useRef(0);
+  const blueCountRef = useRef(0);
+  const hiveTipEventRef = useRef<"red" | "blue" | null>(null);
   const outtakeUntilRef = useRef(0);
   const scorePulseRef = useRef(0);
   const [scorePulse, setScorePulse] = useState(0);
@@ -142,28 +153,35 @@ function BioBuzz() {
         } else label = "Launcher empty";
       }
 
-      // Projectile physics loop with custom infinite respawn mapping
+       // Projectile physics
       let scoredNow = false;
-      list = list.map((b) => {
-        if (!b.flying) return b;
-        const nb = { ...b, x: b.x + b.vx * dt, y: b.y + b.vy * dt, h: b.h + b.vh * dt, vh: b.vh - GRAVITY * dt };
-        
-        if (nb.h <= 0 && nb.vh < 0) {
-          // IF SCORED: Bump points, pulse field meshes, and instantly respawn a replacement ball on the field matrix
-          if (Math.hypot(nb.x - HIVE.x, nb.y - HIVE.y) < HIVE_RADIUS) { 
-            score += 5; 
-            label = "Scored in the hive! +5"; 
-            scoredNow = true; 
-            
-            const randomX = 0.5 + Math.random() * (MAX - 1.0);
-            const randomY = 0.5 + Math.random() * (MAX - 1.0);
-            return { ...nb, id: ballId++, x: randomX, y: randomY, h: 0, vx: 0, vy: 0, vh: 0, flying: false };
+       list = list.flatMap((b) => {
+         if (!b.flying) return [b];
+         const nb = { ...b, x: b.x + b.vx * dt, y: b.y + b.vy * dt, h: b.h + b.vh * dt, vh: b.vh - GRAVITY * dt };
+         if (nb.h <= 0 && nb.vh < 0) {
+          if (Math.hypot(nb.x - HIVE.x, nb.y - HIVE.y) < HIVE_RADIUS) {
+            score += 5;
+            label = "Scored in the hive! +5";
+            scoredNow = true;
+            return [];
           }
-          // IF MISSED: Bring projectile ball rest values to zero directly where it lands
-          return { ...nb, h: 0, vx: 0, vy: 0, vh: 0, flying: false, x: Math.max(0, Math.min(MAX, nb.x)), y: Math.max(0, Math.min(MAX, nb.y)) };
-        }
-        return nb;
-      });
+           return [{ ...nb, h: 0, vx: 0, vy: 0, vh: 0, flying: false, x: Math.max(0, Math.min(MAX, nb.x)), y: Math.max(0, Math.min(MAX, nb.y)) }];
+         }
+         return [nb];
+       });
+      if (scoredNow) {
+        if (alliance === "red") redCountRef.current++;
+        else blueCountRef.current++;
+      }
+
+      // Consume a hive-tip event reported by the R3F tilt rig (HiveTiltRig runs
+      // in its own useFrame loop; this poll keeps the two loops decoupled).
+      if (hiveTipEventRef.current) {
+        const tippedSide = hiveTipEventRef.current;
+        hiveTipEventRef.current = null;
+        score += SCORE.hiveTip;
+        label = `HIVE TIPPED! (${tippedSide} side)`;
+      }
 
       if (scoredNow) {
         scorePulseRef.current++;
@@ -181,6 +199,8 @@ function BioBuzz() {
       setTeleop(next);
       setBalls(list);
       setInv(invRef.current);
+      setRedCount(redCountRef.current);
+      setBlueCount(blueCountRef.current);
       animationId = requestAnimationFrame(tick);
     };
 
@@ -198,18 +218,28 @@ function BioBuzz() {
     const f = { ...initialFrame(), label: "Robot reset" };
     frameRef.current = f;
     invRef.current = 0;
+    redCountRef.current = 0;
+    blueCountRef.current = 0;
+    hiveTipEventRef.current = null;
     ballsRef.current = starterBalls();
     setTeleop(f);
     setInv(0);
+    setRedCount(0);
+    setBlueCount(0);
     setBalls(ballsRef.current);
   };
-
+ 
   const spawn = () => {
     const fresh = Array.from({ length: 6 }, () => floorBall(0.3 + Math.random() * (MAX - 0.6), 0.3 + Math.random() * (MAX - 0.6)));
     ballsRef.current = [...ballsRef.current, ...fresh];
     setBalls(ballsRef.current);
   };
 
+  const handleHiveTip = (side: "red" | "blue") => {
+    hiveTipEventRef.current = side;
+  };
+
+   
   // Global telemetry snapshot — single source of truth for the status HUD below.
   const telemetry = {
     status: teleop.label,
@@ -217,6 +247,9 @@ function BioBuzz() {
     outtakeStatus: performance.now() < outtakeUntilRef.current ? "LAUNCHING" : "OFF",
     ballsCollected: inv,
     headingDegrees: Math.round(teleop.heading),
+    hiveState: Math.abs(redCount - blueCount) >= HIVE_TILT_THRESHOLD ? "HIVE TIPPED" : "BALANCED",
+    redCount,
+    blueCount,
   };
   return (
     <>
@@ -259,9 +292,10 @@ function BioBuzz() {
                 Reset robot
               </button>
             </div>
-            <div className="aspect-square bg-ink-deep p-2">
-              <FieldView3D frame={teleop} level={BIO_LEVEL} variant="biobuzz" liveBalls={balls} scorePulse={scorePulse} />
-            </div>
+
+            <div className="aspect-square bg-ink-deep p-2"><FieldView3D frame={teleop} level={BIO_LEVEL} variant="biobuzz" liveBalls={balls} redCount={redCount} blueCount={blueCount} onHiveTip={handleHiveTip} /></div>
+              
+     
           </div>
           
           <aside className="glass-panel flex flex-col gap-5 rounded-3xl p-6 lg:col-span-4">
@@ -303,34 +337,28 @@ function BioBuzz() {
               </div>
             </div>
             
-            <div className="rounded-xl border border-accent-sky/20 bg-accent-sky/10 p-4 text-sm">
-              <p className="text-[10px] tracking-wider text-accent-sky uppercase">Telemetry</p>
-              <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 font-mono text-xs">
-                <span className="text-muted-foreground">Status</span>
-                <span className="text-right font-semibold">{telemetry.status}</span>
-                
-                <span className="text-muted-foreground">Intake</span>
-                <span className={`text-right font-semibold ${telemetry.intakeStatus === "INTAKING" ? "text-accent-teal" : ""}`}>
-                  {telemetry.intakeStatus}
-                </span>
-                
-                <span className="text-muted-foreground">Outtake</span>
-                <span className={`text-right font-semibold ${telemetry.outtakeStatus === "LAUNCHING" ? "text-amber-300" : ""}`}>
-                  {telemetry.outtakeStatus}
-                </span>
-                
-                <span className="text-muted-foreground">Balls Collected</span>
-                <span className="text-right font-semibold">{telemetry.ballsCollected}/{BALL_CAP} MAX</span>
+             <div className="rounded-xl border border-accent-sky/20 bg-accent-sky/10 p-4 text-sm">
+               <p className="text-[10px] tracking-wider text-accent-sky uppercase">Telemetry</p>
+               <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 font-mono text-xs">
+                 <span className="text-muted-foreground">Status</span><span className="text-right font-semibold">{telemetry.status}</span>
+                 <span className="text-muted-foreground">Intake</span><span className={`text-right font-semibold ${telemetry.intakeStatus === "INTAKING" ? "text-accent-teal" : ""}`}>{telemetry.intakeStatus}</span>
+                 <span className="text-muted-foreground">Outtake</span><span className={`text-right font-semibold ${telemetry.outtakeStatus === "LAUNCHING" ? "text-amber-300" : ""}`}>{telemetry.outtakeStatus}</span>
+                 <span className="text-muted-foreground">Balls Collected</span><span className="text-right font-semibold">{telemetry.ballsCollected}/{BALL_CAP} MAX</span>
+                <span className="text-muted-foreground">Hive</span><span className={`text-right font-semibold ${telemetry.hiveState === "HIVE TIPPED" ? "text-tape" : ""}`}>{telemetry.hiveState}</span>
+                <span className="text-muted-foreground">Red / Blue mass</span><span className="text-right font-semibold">{telemetry.redCount} / {telemetry.blueCount}</span>
+               </div>
+               <p className="mt-3 text-secondary-foreground">X: {teleop.x.toFixed(2)} · Z: {teleop.y.toFixed(2)} · Heading {telemetry.headingDegrees}°</p>
+               <p className="mt-1 text-secondary-foreground">Score: {teleop.score} · Power: {Math.round(teleop.power)}%</p>
+              <div className="mt-3 flex items-center gap-2">
+                <span className="text-[10px] tracking-wider text-muted-foreground uppercase">Practicing as</span>
+                <button
+                  onClick={() => setAlliance((a) => (a === "red" ? "blue" : "red"))}
+                  className={`rounded-md px-2 py-1 text-[11px] font-semibold uppercase ${alliance === "red" ? "bg-red-500/20 text-red-300" : "bg-blue-500/20 text-blue-300"}`}
+                >
+                  {alliance}
+                </button>
               </div>
-              <p className="mt-3 text-secondary-foreground font-mono text-xs">
-                X: {teleop.x.toFixed(2)} · Z: {teleop.y.toFixed(2)} · Heading {telemetry.headingDegrees}°
-              </p>
-              <p className="mt-1 text-secondary-foreground font-mono text-xs">
-                Score: {teleop.score} · Power: {Math.round(teleop.power)}%
-              </p>
-            </div>
-          </aside>
-        </div>
+             </div>
       ) : (
         <div>
           <div className="mb-5 rounded-2xl border border-accent-teal/30 bg-accent-teal/10 p-4 text-sm text-secondary-foreground">
