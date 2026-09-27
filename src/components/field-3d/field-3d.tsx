@@ -352,37 +352,60 @@ function SampleBlock({ x, y }: { x: number; y: number }) {
 }
 
 // ── BioBuzz central angled scoring structure ─────────────────
-function CentralScoringStructure() {
-  const baskets = [-1, 1] as const;
-  return (
-    <group position={[0, 0, 0]}>
-      <mesh position={[0, 0.72, 0]} castShadow>
-        <boxGeometry args={[0.16, 1.45, 0.16]} />
-        <meshStandardMaterial color="#aeb5ba" metalness={0.9} roughness={0.3} />
-      </mesh>
-      {baskets.map((side) => (
-        <group key={side} position={[side * 0.72, 1.32, 0]} rotation={[0, 0, side * 0.28]}>
-          <mesh castShadow>
-            <boxGeometry args={[0.1, 2.3, 0.1]} />
-            <meshStandardMaterial color="#969da2" metalness={0.85} roughness={0.3} />
-          </mesh>
-          <mesh position={[0, 1.12, 0]} rotation={[Math.PI / 2, 0, 0]}>
-            <torusGeometry args={[0.48, 0.07, 10, 20]} />
-            <meshStandardMaterial color={side < 0 ? "#3157c9" : "#d93645"} metalness={0.5} roughness={0.35} />
-          </mesh>
-          <mesh position={[0, 1.08, 0]}>
-            <cylinderGeometry args={[0.38, 0.38, 0.04, 20]} />
-            <meshStandardMaterial color="#282828" roughness={0.9} />
-          </mesh>
-        </group>
-      ))}
-      <mesh position={[0, 0.08, 0]} rotation={[0, 0, Math.PI / 2]}>
-        <boxGeometry args={[2.3, 0.12, 0.12]} />
-        <meshStandardMaterial color="#b9c0c4" metalness={0.85} roughness={0.3} />
-      </mesh>
-    </group>
-  );
-}
+function CentralScoringStructure({ scorePulse = 0 }: { scorePulse?: number }) {
+   const baskets = [-1, 1] as const;
+  const groupRef = useRef<THREE.Group>(null!);
+  const angleRef = useRef(0);
+  const velocityRef = useRef(0);
+  const lastPulse = useRef(scorePulse);
+
+  // A score event bumps scorePulse; that's our "impulse" — the spring below
+  // (angle'' = -k*angle - c*angle') damps it back to rotation 0.
+  useEffect(() => {
+    if (scorePulse !== lastPulse.current) {
+      lastPulse.current = scorePulse;
+      velocityRef.current += 0.55;
+    }
+  }, [scorePulse]);
+
+  useFrame((_, dt) => {
+    const k = 90; // spring stiffness
+    const c = 9; // damping coefficient
+    const accel = -k * angleRef.current - c * velocityRef.current;
+    velocityRef.current += accel * dt;
+    angleRef.current += velocityRef.current * dt;
+    if (groupRef.current) groupRef.current.rotation.z = angleRef.current;
+  });
+
+   return (
+    <group ref={groupRef} position={[0, 0, 0]}>
+       <mesh position={[0, 0.72, 0]} castShadow>
+         <boxGeometry args={[0.16, 1.45, 0.16]} />
+         <meshStandardMaterial color="#aeb5ba" metalness={0.9} roughness={0.3} />
+       </mesh>
+       {baskets.map((side) => (
+         <group key={side} position={[side * 0.72, 1.32, 0]} rotation={[0, 0, side * 0.28]}>
+           <mesh castShadow>
+             <boxGeometry args={[0.1, 2.3, 0.1]} />
+             <meshStandardMaterial color="#969da2" metalness={0.85} roughness={0.3} />
+           </mesh>
+           <mesh position={[0, 1.12, 0]} rotation={[Math.PI / 2, 0, 0]}>
+             <torusGeometry args={[0.48, 0.07, 10, 20]} />
+             <meshStandardMaterial color={side < 0 ? "#3157c9" : "#d93645"} metalness={0.5} roughness={0.35} />
+           </mesh>
+           <mesh position={[0, 1.08, 0]}>
+             <cylinderGeometry args={[0.38, 0.38, 0.04, 20]} />
+             <meshStandardMaterial color="#282828" roughness={0.9} />
+           </mesh>
+         </group>
+       ))}
+       <mesh position={[0, 0.08, 0]} rotation={[0, 0, Math.PI / 2]}>
+         <boxGeometry args={[2.3, 0.12, 0.12]} />
+         <meshStandardMaterial color="#b9c0c4" metalness={0.85} roughness={0.3} />
+       </mesh>
+     </group>
+   );
+ }
 
 function CornerTubes() {
   const spots = [[-5.25, -5.25], [5.25, -5.25], [-5.25, 5.25], [5.25, 5.25]] as const;
@@ -437,7 +460,8 @@ function Balls({ balls }: { balls: FieldBall[] }) {
   );
 }
 
-function Scene({ frame, level, variant, instant, balls }: { frame: Frame; level: Level; variant: Variant; instant?: boolean; balls?: FieldBall[] }) {
+
+function Scene({ frame, level, variant, instant, balls, liveBalls, scorePulse }: { frame: Frame; level: Level; variant: Variant; instant?: boolean; balls?: FieldBall[]; liveBalls?: FieldBall[]; scorePulse?: number }) {
   return (
     <>
       <ambientLight intensity={0.45} />
@@ -466,18 +490,19 @@ function Scene({ frame, level, variant, instant, balls }: { frame: Frame; level:
           <AllianceBorders />
           <PerimeterWalls />
           <StartingBox level={level} />
-          {variant === "biobuzz" ? (
-            <>
-              <CentralScoringStructure />
-              <CornerTubes />
-              <BioBuzzPieces />
-              <NectarBox level={level} />
-            </>
-          ) : (
-            <GoalZone level={level} />
-          )}
-          <Obstacles level={level} variant={variant} />
-          <Samples level={level} taken={frame.taken} variant={variant} />
+          
+           {variant === "biobuzz" ? (
+             <>
+               <CentralScoringStructure scorePulse={scorePulse} />
+               <CornerTubes />
+               <BioBuzzPieces />
+               <NectarBox level={level} />
+             </>
+           ) : (
+             <GoalZone level={level} />
+           )}
+           <Obstacles level={level} variant={variant} />
+           {liveBalls ? <Balls balls={liveBalls} /> : <Samples level={level} taken={frame.taken} variant={variant} />}
         </>
       )}
 
@@ -503,30 +528,44 @@ function Scene({ frame, level, variant, instant, balls }: { frame: Frame; level:
 }
 
 // ── Exported 3D Field View ──────────────────────────────────
-export function FieldView3D({
-  frame,
-  level,
-  variant = "ftc",
-  instant,
-  balls,
-}: {
-  frame: Frame;
-  level: Level;
-  variant?: Variant;
-  instant?: boolean;
-  /** When provided (BioBuzz teleop), render the official field model + live game pieces. */
-  balls?: FieldBall[];
-}) {
-  return (
-    <Canvas
-      shadows
-      camera={{ position: [0, 9, 9], fov: 45 }}
-      dpr={[1, 2]}
-      gl={{ antialias: true, alpha: true }}
-      style={{ width: "100%", height: "100%" }}
-    >
-      <color attach="background" args={[variant === "biobuzz" ? "#10180f" : "#0e0e14"]} />
-      <Scene frame={frame} level={level} variant={variant} {...(instant === undefined ? {} : { instant })} {...(balls ? { balls } : {})} />
-    </Canvas>
-  );
-}
+ export function FieldView3D({
+   frame,
+   level,
+   variant = "ftc",
+   instant,
+   balls,
+  liveBalls,
+  scorePulse,
+ }: {
+   frame: Frame;
+   level: Level;
+   variant?: Variant;
+   instant?: boolean;
+   /** When provided (BioBuzz teleop), render the official field model + live game pieces. */
+   balls?: FieldBall[];
+  /** Live pollen balls (physics state) to render as spheres on the schematic biobuzz field. */
+  liveBalls?: FieldBall[];
+  /** Increment this on every successful hive score to trigger the rocking animation. */
+  scorePulse?: number;
+ }) {
+   return (
+     <Canvas
+       shadows
+       camera={{ position: [0, 9, 9], fov: 45 }}
+       dpr={[1, 2]}
+       gl={{ antialias: true, alpha: true }}
+       style={{ width: "100%", height: "100%" }}
+     >
+       <color attach="background" args={[variant === "biobuzz" ? "#10180f" : "#0e0e14"]} />
+      <Scene
+        frame={frame}
+        level={level}
+        variant={variant}
+        {...(instant === undefined ? {} : { instant })}
+        {...(balls ? { balls } : {})}
+        {...(liveBalls ? { liveBalls } : {})}
+        {...(scorePulse !== undefined ? { scorePulse } : {})}
+      />
+     </Canvas>
+   );
+ }
