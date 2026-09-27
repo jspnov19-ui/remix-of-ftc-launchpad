@@ -21,9 +21,13 @@ const AUTO = "drive(2)      // roll to the pollen\nintake(in)    // suck it up\n
 const initialFrame = (): Frame => ({ ...runProgram("", BIO_LEVEL).frames[0]!, label: "System Ready" });
 const MAX = FIELD_TILES - 1;
 
-const MAX_POLLEN = 4;
+
+const BALL_CAP = 3; // FTC BioBuzz inventory cap — exactly 3 per rules
 const PICKUP_DIST = 0.45; // tiles
-const GRAVITY = 4.9; // tiles / s²
+  // y(t) = y0 + vy0*t - 0.5*g*t^2. Real g = 9.81 m/s²; this sim's "tile" unit is
+  // roughly 0.6 m, so GRAVITY is g scaled into tile-space rather than 9.81 directly —
+  // using 9.81 unscaled here would make every shot drop about twice as fast on screen.
+  const GRAVITY = 4.9;
 const HIVE = { x: (FIELD_TILES - 1) / 2, y: (FIELD_TILES - 1) / 2 }; // field center
 const HIVE_RADIUS = 0.7;
 
@@ -37,10 +41,13 @@ function BioBuzz() {
   const [teleop, setTeleop] = useState<Frame>(initialFrame);
   const [balls, setBalls] = useState<Ball[]>(starterBalls);
   const [inv, setInv] = useState(0);
-  const ballsRef = useRef<Ball[]>(balls);
-  const invRef = useRef(0);
-  const frameRef = useRef<Frame>(teleop);
-  const powerRef = useRef(60);
+   const ballsRef = useRef<Ball[]>(balls);
+   const invRef = useRef(0);
+   const frameRef = useRef<Frame>(teleop);
+   const powerRef = useRef(60);
+  const outtakeUntilRef = useRef(0);
+  const scorePulseRef = useRef(0);
+  const [scorePulse, setScorePulse] = useState(0);
 
   useEffect(() => {
     if (mode !== "teleop") return;
@@ -96,41 +103,47 @@ function BioBuzz() {
       if (intakeOn) {
         const bx = x + forwardX * 0.3, by = y + forwardY * 0.3;
         list = list.filter((b) => {
-          if (b.flying || invRef.current >= MAX_POLLEN) return true;
-          if (Math.hypot(b.x - bx, b.y - by) < PICKUP_DIST) { invRef.current++; label = "Pollen collected!"; return false; }
-          return true;
-        });
-        if (invRef.current >= MAX_POLLEN) label = "Storage full (4 pollen)";
+        if (b.flying || invRef.current >= BALL_CAP) return true;
+         if (Math.hypot(b.x - bx, b.y - by) < PICKUP_DIST) { invRef.current++; label = "Pollen collected!"; return false; }
+         return true;
+       });
+      if (invRef.current >= BALL_CAP) label = `Storage full (${BALL_CAP} pollen)`;
       }
 
       // Fire: spawn a projectile at the rear-top muzzle, aimed at the hive
-      if (fire) {
-        fire = false;
-        if (invRef.current > 0) {
-          invRef.current--;
-          const mx = x - forwardX * 0.3, my = y - forwardY * 0.3, mh = 0.45;
-          const dx = HIVE.x - mx, dy = HIVE.y - my;
-          const dist = Math.max(0.3, Math.hypot(dx, dy));
-          const flight = 0.6 + dist * 0.25 * (60 / powerRef.current);
-          list = [...list, {
-            id: ballId++, x: mx, y: my, h: mh, flying: true,
-            vx: dx / flight, vy: dy / flight,
-            vh: (0 - mh + 0.5 * GRAVITY * flight * flight) / flight + 0.6,
-          }];
-          label = "Launched!";
-        } else label = "Launcher empty";
-      }
+       if (fire) {
+         fire = false;
+         if (invRef.current > 0) {
+           invRef.current--;
+           outtakeUntilRef.current = now + 350;
+           const mx = x - forwardX * 0.3, my = y - forwardY * 0.3, mh = 0.45;
+           const dx = HIVE.x - mx, dy = HIVE.y - my;
+           const dist = Math.max(0.3, Math.hypot(dx, dy));
+           const flight = 0.6 + dist * 0.25 * (60 / powerRef.current);
+           list = [...list, {
+             id: ballId++, x: mx, y: my, h: mh, flying: true,
+             vx: dx / flight, vy: dy / flight,
+             vh: (0 - mh + 0.5 * GRAVITY * flight * flight) / flight + 0.6,
+           }];
+           label = "Launched!";
+         } else label = "Launcher empty";
+       }
 
-      // Projectile physics
-      list = list.flatMap((b) => {
-        if (!b.flying) return [b];
-        const nb = { ...b, x: b.x + b.vx * dt, y: b.y + b.vy * dt, h: b.h + b.vh * dt, vh: b.vh - GRAVITY * dt };
-        if (nb.h <= 0 && nb.vh < 0) {
-          if (Math.hypot(nb.x - HIVE.x, nb.y - HIVE.y) < HIVE_RADIUS) { score += 5; label = "Scored in the hive! +5"; return []; }
-          return [{ ...nb, h: 0, vx: 0, vy: 0, vh: 0, flying: false, x: Math.max(0, Math.min(MAX, nb.x)), y: Math.max(0, Math.min(MAX, nb.y)) }];
-        }
-        return [nb];
-      });
+      // Projectile physics: per-frame integration of y(t) = y0 + vy0*t - 0.5*g*t^2
+      let scoredNow = false;
+       list = list.flatMap((b) => {
+         if (!b.flying) return [b];
+         const nb = { ...b, x: b.x + b.vx * dt, y: b.y + b.vy * dt, h: b.h + b.vh * dt, vh: b.vh - GRAVITY * dt };
+         if (nb.h <= 0 && nb.vh < 0) {
+          if (Math.hypot(nb.x - HIVE.x, nb.y - HIVE.y) < HIVE_RADIUS) { score += 5; label = "Scored in the hive! +5"; scoredNow = true; return []; }
+           return [{ ...nb, h: 0, vx: 0, vy: 0, vh: 0, flying: false, x: Math.max(0, Math.min(MAX, nb.x)), y: Math.max(0, Math.min(MAX, nb.y)) }];
+         }
+         return [nb];
+       });
+      if (scoredNow) {
+        scorePulseRef.current++;
+        setScorePulse(scorePulseRef.current);
+      }
 
       ballsRef.current = list;
       const next: Frame = { ...c, x, y, heading, score, label, power: powerRef.current, holding: invRef.current > 0, intake: intakeOn ? "in" : "idle" };
@@ -166,7 +179,14 @@ function BioBuzz() {
     ballsRef.current = [...ballsRef.current, ...fresh];
     setBalls(ballsRef.current);
   };
-
+  // Global telemetry snapshot — single source of truth for the status HUD below.
+  const telemetry = {
+    status: teleop.label,
+    intakeStatus: teleop.intake === "in" ? "INTAKING" : "OFF",
+    outtakeStatus: performance.now() < outtakeUntilRef.current ? "LAUNCHING" : "OFF",
+    ballsCollected: inv,
+    headingDegrees: Math.round(teleop.heading),
+  };
   return (
     <>
       <section className="pt-14 pb-7">
@@ -187,12 +207,25 @@ function BioBuzz() {
         <div className="grid gap-5 lg:grid-cols-12">
           <div className="glass-panel overflow-hidden rounded-3xl lg:col-span-8">
             <div className="flex items-center justify-between border-b border-border bg-white/5 px-4 py-3"><span className="font-display text-sm font-semibold">Pollination field</span><button onClick={reset} className="text-xs text-muted-foreground underline underline-offset-4">Reset robot</button></div>
-            <div className="aspect-square bg-ink-deep p-2"><FieldView3D frame={teleop} level={BIO_LEVEL} variant="biobuzz" /></div>
+            <div className="aspect-square bg-ink-deep p-2"><FieldView3D frame={teleop} level={BIO_LEVEL} variant="biobuzz" liveBalls={balls} scorePulse={scorePulse} /></div>
+            
           </div>
           <aside className="glass-panel flex flex-col gap-5 rounded-3xl p-6 lg:col-span-4">
             <div><p className="text-[10px] tracking-wider text-accent-teal uppercase">Teleop controls</p><h2 className="mt-2 font-display text-2xl font-semibold">Pilot the bot</h2><p className="mt-2 text-sm leading-relaxed text-secondary-foreground">Keyboard controls are active while this mode is selected.</p></div>
             <div className="grid grid-cols-2 gap-2 text-xs"><div className="rounded-xl border border-border bg-white/5 p-3"><Keyboard className="mb-2 size-4 text-accent-sky" /><b>WASD</b><p className="mt-1 text-muted-foreground">drive / strafe</p></div><div className="rounded-xl border border-border bg-white/5 p-3"><Target className="mb-2 size-4 text-accent-sky" /><b>Arrows</b><p className="mt-1 text-muted-foreground">turn + aim</p></div><div className="rounded-xl border border-border bg-white/5 p-3"><b className="font-mono text-accent-teal">J / U</b><p className="mt-1 text-muted-foreground">toggle intake</p></div><div className="rounded-xl border border-border bg-white/5 p-3"><b className="font-mono text-accent-teal">L / N</b><p className="mt-1 text-muted-foreground">launch ball</p></div><div className="rounded-xl border border-border bg-white/5 p-3"><Zap className="mb-2 size-4 text-amber-300" /><b>I / K</b><p className="mt-1 text-muted-foreground">power + / −</p></div><div className="rounded-xl border border-border bg-white/5 p-3"><b className="font-mono text-accent-teal">M</b><p className="mt-1 text-muted-foreground">stop rollers</p></div></div>
-            <div className="rounded-xl border border-accent-sky/20 bg-accent-sky/10 p-4 text-sm"><p className="text-[10px] tracking-wider text-accent-sky uppercase">Live status</p><p className="mt-2 font-semibold">{teleop.label}</p><p className="mt-1 text-secondary-foreground">X: {teleop.x.toFixed(2)} · Z: {teleop.y.toFixed(2)} · Heading {teleop.heading.toFixed(0)}°</p><p className="mt-1 text-secondary-foreground">Inventory: {teleop.holding ? "Carrying Element" : "Empty Rollers"}</p><p className="mt-1 text-secondary-foreground">Score: {teleop.score} · Power: {Math.round(teleop.power)}% · Active Rollers: {teleop.intake}</p></div>
+               <div className="rounded-xl border border-accent-sky/20 bg-accent-sky/10 p-4 text-sm">
+              <p className="text-[10px] tracking-wider text-accent-sky uppercase">Telemetry</p>
+              <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 font-mono text-xs">
+                <span className="text-muted-foreground">Status</span><span className="text-right font-semibold">{telemetry.status}</span>
+                <span className="text-muted-foreground">Intake</span><span className={`text-right font-semibold ${telemetry.intakeStatus === "INTAKING" ? "text-accent-teal" : ""}`}>{telemetry.intakeStatus}</span>
+                <span className="text-muted-foreground">Outtake</span><span className={`text-right font-semibold ${telemetry.outtakeStatus === "LAUNCHING" ? "text-amber-300" : ""}`}>{telemetry.outtakeStatus}</span>
+                <span className="text-muted-foreground">Balls Collected</span><span className="text-right font-semibold">{telemetry.ballsCollected}/{BALL_CAP} MAX</span>
+              </div>
+              <p className="mt-3 text-secondary-foreground">X: {teleop.x.toFixed(2)} · Z: {teleop.y.toFixed(2)} · Heading {telemetry.headingDegrees}°</p>
+              <p className="mt-1 text-secondary-foreground">Score: {teleop.score} · Power: {Math.round(teleop.power)}%</p>
+            </div>
+          
+          
           </aside>
         </div>
       ) : (
