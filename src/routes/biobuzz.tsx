@@ -255,7 +255,6 @@ const telemetry = {
   launcherPitch: Math.round(aimAngleRef.current),
 };
 
-
   return (
     <>
       <section className="pt-14 pb-7">
@@ -329,7 +328,7 @@ const telemetry = {
               <div className="rounded-xl border border-border bg-white/5 p-3">
                 <Target className="mb-2 size-4 text-accent-sky" />
                 <b>Arrows</b>
-                <p className="mt-1 text-muted-foreground">turn + aim</p>
+                <p className="mt-1 text-muted-foreground">turn chassis</p>
               </div>
               <div className="rounded-xl border border-border bg-white/5 p-3">
                 <b className="font-mono text-accent-teal">J / U</b>
@@ -345,8 +344,12 @@ const telemetry = {
                 <p className="mt-1 text-muted-foreground">power + / −</p>
               </div>
               <div className="rounded-xl border border-border bg-white/5 p-3">
+                <b className="font-mono text-accent-teal">P / O</b>
+                <p className="mt-1 text-muted-foreground">pitch angle + / −</p>
+              </div>
+              <div className="rounded-xl border border-border bg-white/5 p-3 col-span-2">
                 <b className="font-mono text-accent-teal">M</b>
-                <p className="mt-1 text-muted-foreground">stop rollers</p>
+                <p className="mt-1 text-muted-foreground">stop rollers immediately</p>
               </div>
             </div>
             
@@ -381,7 +384,7 @@ const telemetry = {
                 X: {teleop.x.toFixed(2)} · Z: {teleop.y.toFixed(2)} · Heading {telemetry.headingDegrees}°
               </p>
               <p className="mt-1 text-secondary-foreground font-mono text-xs">
-                Score: {teleop.score} · Power: {Math.round(teleop.power)}%
+                Score: {teleop.score} · Power: {Math.round(teleop.power)}% · Pitch: {telemetry.launcherPitch}°
               </p>
               <div className="mt-3 flex items-center gap-2">
                 <span className="text-[10px] tracking-wider text-muted-foreground uppercase">Practicing as</span>
