@@ -39,6 +39,8 @@ const starterBalls = () => [floorBall(1, 3), floorBall(4, 4), floorBall(0.5, 1.5
 const SCORE = { hiveTip: 20 };
 
 function BioBuzz() {
+  const aimAngleRef = useRef(45); // Default starting launch angle (45 degrees)
+
   const [mode, setMode] = useState<"teleop" | "autonomous">("teleop");
   const [teleop, setTeleop] = useState<Frame>(initialFrame);
   const [balls, setBalls] = useState<Ball[]>(starterBalls);
@@ -64,7 +66,8 @@ function BioBuzz() {
     const held = new Set<string>();
     let intakeOn = false;
     let fire = false;
-    const KEYS = ["w", "a", "s", "d", "arrowleft", "arrowright", "i", "k", "j", "u", "l", "n", "m"];
+// Update your KEYS array to listen for 'o' and 'p' keys:
+const KEYS = ["w", "a", "s", "d", "arrowleft", "arrowright", "i", "k", "j", "u", "l", "n", "m", "o", "p"];
 
     const onKey = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
@@ -94,6 +97,9 @@ function BioBuzz() {
       const forwardX = Math.sin(rad), forwardY = Math.cos(rad);
       const rightX = Math.cos(rad), rightY = -Math.sin(rad);
       let x = c.x, y = c.y;
+if (held.has("p")) aimAngleRef.current = Math.min(80, aimAngleRef.current + 45 * dt); // Upper mechanical ceiling cap
+if (held.has("o")) aimAngleRef.current = Math.max(15, aimAngleRef.current - 45 * dt); // Lower floor boundary rail
+
       if (held.has("w")) { x += forwardX * speed; y += forwardY * speed; }
       if (held.has("s")) { x -= forwardX * speed; y -= forwardY * speed; }
       if (held.has("d")) { x += rightX * speed; y += rightY * speed; }
@@ -119,37 +125,37 @@ function BioBuzz() {
       }
 
       // Fire: spawn a projectile based strictly on robot heading and proportional launch power
-      if (fire) {
-        fire = false;
-        if (invRef.current > 0) {
-          invRef.current--;
-          outtakeUntilRef.current = now + 350;
-          
-          // Establish initial launcher position at the center-rear edge of the robot configuration
-          const mx = x - forwardX * 0.1, my = y - forwardY * 0.1, mh = 0.45;
-          
-          // Map slider power directly to forward speed velocity magnitude (Higher % = More power)
-          const launchVelocityMagnitude = 2.0 + (powerRef.current / 100) * 4.5;
-          
-          // Project 3D vector paths strictly utilizing the robot's active heading orientation angle
-          const launchAngleElevation = 45 * Math.PI / 180; // fixed shooter angle configuration
-          
-          list = [...list, {
-            id: ballId++, 
-            x: mx, 
-            y: my, 
-            h: mh, 
-            flying: true,
-            // Split horizontal components along the robot's specific heading direction
-            vx: -forwardX * Math.cos(launchAngleElevation) * launchVelocityMagnitude, 
-            vy: -forwardY * Math.cos(launchAngleElevation) * launchVelocityMagnitude,
-            // Upward vertical speed vector component
-            vh: Math.sin(launchAngleElevation) * launchVelocityMagnitude,
-          }];
-          
-          label = "Launched!";
-        } else label = "Launcher empty";
-      }
+if (fire) {
+  fire = false;
+  if (invRef.current > 0) {
+    invRef.current--;
+    outtakeUntilRef.current = now + 350;
+    
+    // Spawns the projectile exactly at the FRONT bumper structure (+ forwardX)
+    const mx = x + forwardX * 0.3, my = y + forwardY * 0.3, mh = 0.45;
+    
+    // Map velocity speed directly to slider power
+    const launchVelocityMagnitude = 2.0 + (powerRef.current / 100) * 4.5;
+    
+    // Dynamically calculate the active launcher pitch angle from state refs
+    const launchAngleElevation = (aimAngleRef.current * Math.PI) / 180;
+    
+    list = [...list, {
+      id: ballId++, 
+      x: mx, 
+      y: my, 
+      h: mh, 
+      flying: true,
+      // SHOOT FORWARD: Changed negative signs to positive scalars to fire out of the front bumper
+      vx: forwardX * Math.cos(launchAngleElevation) * launchVelocityMagnitude, 
+      vy: forwardY * Math.cos(launchAngleElevation) * launchVelocityMagnitude,
+      vh: Math.sin(launchAngleElevation) * launchVelocityMagnitude,
+    }];
+    
+    label = `Launched at ${Math.round(aimAngleRef.current)}°!`;
+  } else label = "Launcher empty";
+}
+
 
       // Projectile physics integration loop with scoring zone validation rules
       let scoredNow = false;
@@ -236,16 +242,19 @@ function BioBuzz() {
   };
 
   // Global telemetry snapshot — single source of truth for the status HUD below.
-  const telemetry = {
-    status: teleop.label,
-    intakeStatus: teleop.intake === "in" ? "INTAKING" : "OFF",
-    outtakeStatus: performance.now() < outtakeUntilRef.current ? "LAUNCHING" : "OFF",
-    ballsCollected: inv,
-    headingDegrees: Math.round(teleop.heading),
-    hiveState: Math.abs(redCount - blueCount) >= HIVE_TILT_THRESHOLD ? "HIVE TIPPED" : "BALANCED",
-    redCount,
-    blueCount,
-  };
+const telemetry = {
+  status: teleop.label,
+  intakeStatus: teleop.intake === "in" ? "INTAKING" : "OFF",
+  outtakeStatus: performance.now() < outtakeUntilRef.current ? "LAUNCHING" : "OFF",
+  ballsCollected: inv,
+  headingDegrees: Math.round(teleop.heading),
+  hiveState: Math.abs(redCount - blueCount) >= HIVE_TILT_THRESHOLD ? "HIVE TIPPED" : "BALANCED",
+  redCount,
+  blueCount,
+  // Add this field to pass the live angle text value down into your HTML cards:
+  launcherPitch: Math.round(aimAngleRef.current),
+};
+
 
   return (
     <>
