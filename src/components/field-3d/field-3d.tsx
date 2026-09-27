@@ -1,5 +1,5 @@
-import { Suspense, useMemo } from "react";
-import { Canvas } from "@react-three/fiber";
+import { Suspense, useMemo, useRef, useEffect } from "react";
+import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, ContactShadows, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import { FIELD_TILES, levelSamples, type Frame, type Level } from "@/lib/sim";
