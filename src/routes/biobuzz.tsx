@@ -15,7 +15,6 @@ export const Route = createFileRoute("/biobuzz")({
   component: BioBuzz,
 });
 
-// Calibrated game positions scaled down inside the 12'x12' box boundaries
 const BIO_LEVEL = { start: { x: 0.0, y: 0.0 }, sample: { x: 0.5, y: -0.5 }, goal: { x: -1.2, y: 1.2 } };
 const AUTO = "drive(2)\nintake(in)\naim(15)\npower(80)\nturn(90)\ndrive(2)\nintake(out)\nscore()";
 
@@ -23,7 +22,6 @@ function BioBuzz() {
   const [mode, setMode] = useState<"teleop" | "autonomous">("teleop");
   const [teleop, setTeleop] = useState<Frame>(() => {
     const initial = runProgram("", BIO_LEVEL).frames!;
-    // Hardcode true starting physics coordinates center-stage inside the model perimeter
     return { ...initial, x: 0.0, y: 0.0, heading: 0, holding: false, label: "System Ready", intake: "idle" };
   });
   const [pressed, setPressed] = useState<string[]>([]);
@@ -50,7 +48,6 @@ function BioBuzz() {
       setPressed([...localPressed]);
     };
 
-    // Continuous Real-Time TeleOp Core Loop Engine
     const updatePhysics = () => {
       setTeleop((current) => {
         let x = current.x;
@@ -59,48 +56,40 @@ function BioBuzz() {
         let holding = current.holding;
         let intakeState = current.intake;
 
-        // Configuration Settings mapping real scale sizes
-        const speed = 0.04;      // Fluid continuous movement velocity vectors
-        const turnSpeed = 3.5;   // Continuous heading rotation velocity 
-        const fieldBound = 1.62; // Hard wall boundary constraint limits (Stops robot clipping)
+        const speed = 0.04;      
+        const turnSpeed = 3.5;   
+        const fieldBound = 1.62; 
 
-        // Calculate heading directional forward/strafe angles
         const rad = (heading * Math.PI) / 180;
         const forwardX = Math.sin(rad);
         const forwardY = Math.cos(rad);
         const strafeX = Math.cos(rad);
         const strafeY = -Math.sin(rad);
 
-        // Drive Controls
         if (localPressed.includes("w")) { x += forwardX * speed; y += forwardY * speed; }
         if (localPressed.includes("s")) { x -= forwardX * speed; y -= forwardY * speed; }
         if (localPressed.includes("a")) { x -= strafeX * speed; y -= strafeY * speed; }
         if (localPressed.includes("d")) { x += strafeX * speed; y += strafeY * speed; }
 
-        // Rotation & Turn Controls
         if (localPressed.includes("arrowleft")) heading -= turnSpeed;
         if (localPressed.includes("arrowright")) heading += turnSpeed;
 
-        // Hard Boundary Clamp Checks (Locks the chassis safely inside the field)
         x = Math.max(-fieldBound, Math.min(fieldBound, x));
         y = Math.max(-fieldBound, Math.min(fieldBound, y));
 
-        // Intake Mechanics Rule Engine (J/U keys)
         if (localPressed.includes("j") || localPressed.includes("u")) {
           intakeState = "in";
-          // Calculate proximity vector distance between robot front bumper and game piece
           const distToSample = Math.sqrt(Math.pow(x - BIO_LEVEL.sample.x, 2) + Math.pow(y - BIO_LEVEL.sample.y, 2));
           if (distToSample < 0.35) {
-            holding = true; // Intake successfully registers contact and locks piece to collection node
+            holding = true; 
           }
         } else if (localPressed.includes("l") || localPressed.includes("n")) {
           intakeState = "out";
-          holding = false; // Action outtake clears asset array elements
+          holding = false; 
         } else if (localPressed.includes("m")) {
           intakeState = "idle";
         }
 
-        // Live parameter generation profiles
         let actionLabel = "Teleop Action Loop";
         if (localPressed.length > 0) {
           actionLabel = "Driving Active";
@@ -175,24 +164,12 @@ function BioBuzz() {
           <aside className="glass-panel flex flex-col gap-5 rounded-3xl p-6 lg:col-span-4">
             <div><p className="text-[10px] tracking-wider text-accent-teal uppercase">Teleop controls</p><h2 className="mt-2 font-display text-2xl font-semibold">Pilot the bot</h2><p className="mt-2 text-sm leading-relaxed text-secondary-foreground">Keyboard controls are active while this mode is selected.</p></div>
             <div className="grid grid-cols-2 gap-2 text-xs"><div className="rounded-xl border border-border bg-white/5 p-3"><Keyboard className="mb-2 size-4 text-accent-sky" /><b>WASD</b><p className="mt-1 text-muted-foreground">drive / strafe</p></div><div className="rounded-xl border border-border bg-white/5 p-3"><Target className="mb-2 size-4 text-accent-sky" /><b>Arrows</b><p className="mt-1 text-muted-foreground">turn + aim</p></div><div className="rounded-xl border border-border bg-white/5 p-3"><b className="font-mono text-accent-teal">J / U</b><p className="mt-1 text-muted-foreground">intake ball</p></div><div className="rounded-xl border border-border bg-white/5 p-3"><b className="font-mono text-accent-teal">L / N</b><p className="mt-1 text-muted-foreground">outtake ball</p></div><div className="rounded-xl border border-border bg-white/5 p-3"><Zap className="mb-2 size-4 text-amber-300" /><b>I / K</b><p className="mt-1 text-muted-foreground">power + / −</p></div><div className="rounded-xl border border-border bg-white/5 p-3"><b className="font-mono text-accent-teal">M</b><p className="mt-1 text-muted-foreground">stop rollers</p></div></div>
-                        <div className="rounded-xl border border-accent-sky/20 bg-accent-sky/10 p-4 text-sm">
-              <p className="text-[10px] tracking-wider text-accent-sky uppercase">Live status</p>
-              <p className="mt-2 font-semibold">{teleop.label}</p>
-              <p className="mt-1 text-secondary-foreground">X: {teleop.x.toFixed(2)} · Z: {teleop.y.toFixed(2)} · Heading {teleop.heading.toFixed(0)}°</p>
-              <p className="mt-1 text-secondary-foreground">Inventory: {teleop.holding ? "Carrying Element" : "Empty Rollers"}</p>
-              <p className="mt-1 text-secondary-foreground">Power Vector: {teleop.power}% · Active Rollers: {teleop.intake}</p>
-            </div>
+            <div className="rounded-xl border border-accent-sky/20 bg-accent-sky/10 p-4 text-sm"><p className="text-[10px] tracking-wider text-accent-sky uppercase">Live status</p><p className="mt-2 font-semibold">{teleop.label}</p><p className="mt-1 text-secondary-foreground">X: {teleop.x.toFixed(2)} · Z: {teleop.y.toFixed(2)} · Heading {teleop.heading.toFixed(0)}°</p><p className="mt-1 text-secondary-foreground">Inventory: {teleop.holding ? "Carrying Element" : "Empty Rollers"}</p><p className="mt-1 text-secondary-foreground">Power Vector: {teleop.power}% · Active Rollers: {teleop.intake}</p></div>
           </aside>
         </div>
       ) : (
-        <div>
-          <div className="mb-5 rounded-2xl border border-accent-teal/30 bg-accent-teal/10 p-4 text-sm text-secondary-foreground">
-            Autonomous console: edit the program, then run it to see pollen collection and nectar scoring on the BioBuzz field.
-          </div>
-          <SimWorkbench level={BIO_LEVEL} starter={AUTO} variant="biobuzz" />
-        </div>
+        <div><div className="mb-5 rounded-2xl border border-accent-teal/30 bg-accent-teal/10 p-4 text-sm text-secondary-foreground">Autonomous console: edit the program, then run it to see pollen collection and nectar scoring on the BioBuzz field.</div><SimWorkbench level={BIO_LEVEL} starter={AUTO} variant="biobuzz" /></div>
       )}
     </>
   );
 }
-
