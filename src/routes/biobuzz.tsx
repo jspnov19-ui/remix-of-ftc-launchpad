@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Bug, Gamepad2, Keyboard, Sparkles, Target, Zap } from "lucide-react";
 import { FieldView3D } from "@/components/field-3d/field-3d";
 import { SimWorkbench } from "@/components/sim-workbench";
-import { runProgram, type Frame } from "@/lib/sim";
+import { FIELD_TILES, runProgram, type Frame, type Level } from "@/lib/sim";
 
 export const Route = createFileRoute("/biobuzz")({
   head: () => ({
@@ -15,108 +15,91 @@ export const Route = createFileRoute("/biobuzz")({
   component: BioBuzz,
 });
 
-const BIO_LEVEL = { start: { x: 0.0, y: 0.0 }, sample: { x: 0.5, y: -0.5 }, goal: { x: -1.2, y: 1.2 } };
-const AUTO = "drive(2)\nintake(in)\naim(15)\npower(80)\nturn(90)\ndrive(2)\nintake(out)\nscore()";
+const BIO_LEVEL: Level = { start: { x: 1, y: 5 }, sample: { x: 1, y: 3 }, goal: { x: 3, y: 1 } };
+const AUTO = "drive(2)      // roll to the pollen\nintake(in)    // suck it up\ndrive(2)\nturn(90)\ndrive(2)      // into the nectar box\naim(15)\npower(80)\nscore()";
+
+const initialFrame = (): Frame => ({ ...runProgram("", BIO_LEVEL).frames[0]!, label: "System Ready" });
+const MAX = FIELD_TILES - 1;
 
 function BioBuzz() {
   const [mode, setMode] = useState<"teleop" | "autonomous">("teleop");
-  const [teleop, setTeleop] = useState<Frame>(() => {
-    const initial = runProgram("", BIO_LEVEL).frames!;
-    return { ...initial, x: 0.0, y: 0.0, heading: 0, holding: false, label: "System Ready", intake: "idle" };
-  });
-  const [pressed, setPressed] = useState<string[]>([]);
+  const [teleop, setTeleop] = useState<Frame>(initialFrame);
 
   useEffect(() => {
     if (mode !== "teleop") return;
+    let animationId = 0;
+    let last = performance.now();
+    const held = new Set<string>();
+    let intakeOn = false;
+    let fire = false;
+    const KEYS = ["w", "a", "s", "d", "arrowleft", "arrowright", "i", "k", "j", "u", "l", "n", "m"];
 
-    let animationId: number;
-    let localPressed: string[] = [];
-
-    const onKey = (event: KeyboardEvent) => {
-      const key = event.key.toLowerCase();
-      if (!["w", "a", "s", "d", "arrowleft", "arrowright", "i", "k", "o", "p", "j", "l", "u", "n", "m"].includes(key)) return;
-      event.preventDefault();
-      if (!localPressed.includes(key)) {
-        localPressed.push(key);
-        setPressed([...localPressed]);
-      }
+    const onKey = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase();
+      if (!KEYS.includes(key)) return;
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      e.preventDefault();
+      if (e.repeat) return;
+      if (key === "j" || key === "u") intakeOn = !intakeOn;
+      else if (key === "l" || key === "n") fire = true;
+      else if (key === "m") intakeOn = false;
+      held.add(key);
     };
+    const onUp = (e: KeyboardEvent) => held.delete(e.key.toLowerCase());
 
-    const onUp = (event: KeyboardEvent) => {
-      const key = event.key.toLowerCase();
-      localPressed = localPressed.filter((k) => k !== key);
-      setPressed([...localPressed]);
-    };
-
-    const updatePhysics = () => {
-      setTeleop((current) => {
-        let x = current.x;
-        let y = current.y;
-        let heading = current.heading;
-        let holding = current.holding;
-        let intakeState = current.intake;
-
-        const speed = 0.04;      
-        const turnSpeed = 3.5;   
-        const fieldBound = 1.62; 
-
+    const tick = (now: number) => {
+      const dt = Math.min((now - last) / 1000, 0.05);
+      last = now;
+      setTeleop((c) => {
+        const speed = 2.2 * dt; // tiles per second
+        const turn = 160 * dt;
+        let heading = c.heading;
+        if (held.has("arrowleft")) heading -= turn;
+        if (held.has("arrowright")) heading += turn;
+        heading = ((heading % 360) + 360) % 360;
         const rad = (heading * Math.PI) / 180;
-        const forwardX = Math.sin(rad);
-        const forwardY = Math.cos(rad);
-        const strafeX = Math.cos(rad);
-        const strafeY = -Math.sin(rad);
+        const fx = Math.sin(rad), fy = -Math.cos(rad);
+        const rx = Math.cos(rad), ry = Math.sin(rad);
+        let x = c.x, y = c.y;
+        if (held.has("w")) { x += fx * speed; y += fy * speed; }
+        if (held.has("s")) { x -= fx * speed; y -= fy * speed; }
+        if (held.has("d")) { x += rx * speed; y += ry * speed; }
+        if (held.has("a")) { x -= rx * speed; y -= ry * speed; }
+        x = Math.max(0, Math.min(MAX, x));
+        y = Math.max(0, Math.min(MAX, y));
 
-        if (localPressed.includes("w")) { x += forwardX * speed; y += forwardY * speed; }
-        if (localPressed.includes("s")) { x -= forwardX * speed; y -= forwardY * speed; }
-        if (localPressed.includes("a")) { x -= strafeX * speed; y -= strafeY * speed; }
-        if (localPressed.includes("d")) { x += strafeX * speed; y += strafeY * speed; }
-
-        if (localPressed.includes("arrowleft")) heading -= turnSpeed;
-        if (localPressed.includes("arrowright")) heading += turnSpeed;
-
-        x = Math.max(-fieldBound, Math.min(fieldBound, x));
-        y = Math.max(-fieldBound, Math.min(fieldBound, y));
-
-        if (localPressed.includes("j") || localPressed.includes("u")) {
-          intakeState = "in";
-          const distToSample = Math.sqrt(Math.pow(x - BIO_LEVEL.sample.x, 2) + Math.pow(y - BIO_LEVEL.sample.y, 2));
-          if (distToSample < 0.35) {
-            holding = true; 
-          }
-        } else if (localPressed.includes("l") || localPressed.includes("n")) {
-          intakeState = "out";
-          holding = false; 
-        } else if (localPressed.includes("m")) {
-          intakeState = "idle";
+        let { holding, taken, score } = c;
+        let label = held.size ? "Driving" : "Waiting for input…";
+        const sample = BIO_LEVEL.sample!;
+        if (intakeOn && !holding && !taken.includes(0) && Math.hypot(x - sample.x, y - sample.y) < 0.5) {
+          holding = true;
+          taken = [0];
+          label = "Pollen collected!";
         }
-
-        let actionLabel = "Teleop Action Loop";
-        if (localPressed.length > 0) {
-          actionLabel = "Driving Active";
-        } else {
-          actionLabel = "Waiting for Input...";
+        if (fire) {
+          fire = false;
+          if (holding) {
+            holding = false;
+            const goal = BIO_LEVEL.goal!;
+            if (Math.hypot(x - goal.x, y - goal.y) < 0.6) {
+              score += 12;
+              label = "Scored in the nectar box! +12";
+            } else {
+              taken = [];
+              label = "Missed — pollen returned to its mark";
+            }
+          } else label = "Launcher empty";
         }
-
-        return {
-          ...current,
-          x,
-          y,
-          heading,
-          intake: intakeState,
-          holding,
-          label: actionLabel,
-          arm: localPressed.includes("i") ? "up" : localPressed.includes("k") ? "down" : current.arm,
-          power: localPressed.includes("i") ? Math.min(100, current.power + 2) : localPressed.includes("k") ? Math.max(0, current.power - 2) : current.power,
-        };
+        const power = held.has("i") ? Math.min(100, c.power + 60 * dt) : held.has("k") ? Math.max(0, c.power - 60 * dt) : c.power;
+        return { ...c, x, y, heading, holding, taken, score, label, power, intake: intakeOn ? "in" : "idle" };
       });
-
-      animationId = requestAnimationFrame(updatePhysics);
+      animationId = requestAnimationFrame(tick);
     };
 
     window.addEventListener("keydown", onKey);
     window.addEventListener("keyup", onUp);
-    animationId = requestAnimationFrame(updatePhysics);
-
+    animationId = requestAnimationFrame(tick);
     return () => {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("keyup", onUp);
@@ -124,20 +107,7 @@ function BioBuzz() {
     };
   }, [mode]);
 
-  const reset = () => {
-    setTeleop({
-      x: 0.0,
-      y: 0.0,
-      heading: 0,
-      aim: 0,
-      power: 0,
-      arm: "down",
-      claw: "open",
-      intake: "idle",
-      holding: false,
-      label: "System Reset Successful",
-    });
-  };
+  const reset = () => setTeleop({ ...initialFrame(), label: "Robot reset" });
 
   return (
     <>
@@ -163,8 +133,8 @@ function BioBuzz() {
           </div>
           <aside className="glass-panel flex flex-col gap-5 rounded-3xl p-6 lg:col-span-4">
             <div><p className="text-[10px] tracking-wider text-accent-teal uppercase">Teleop controls</p><h2 className="mt-2 font-display text-2xl font-semibold">Pilot the bot</h2><p className="mt-2 text-sm leading-relaxed text-secondary-foreground">Keyboard controls are active while this mode is selected.</p></div>
-            <div className="grid grid-cols-2 gap-2 text-xs"><div className="rounded-xl border border-border bg-white/5 p-3"><Keyboard className="mb-2 size-4 text-accent-sky" /><b>WASD</b><p className="mt-1 text-muted-foreground">drive / strafe</p></div><div className="rounded-xl border border-border bg-white/5 p-3"><Target className="mb-2 size-4 text-accent-sky" /><b>Arrows</b><p className="mt-1 text-muted-foreground">turn + aim</p></div><div className="rounded-xl border border-border bg-white/5 p-3"><b className="font-mono text-accent-teal">J / U</b><p className="mt-1 text-muted-foreground">intake ball</p></div><div className="rounded-xl border border-border bg-white/5 p-3"><b className="font-mono text-accent-teal">L / N</b><p className="mt-1 text-muted-foreground">outtake ball</p></div><div className="rounded-xl border border-border bg-white/5 p-3"><Zap className="mb-2 size-4 text-amber-300" /><b>I / K</b><p className="mt-1 text-muted-foreground">power + / −</p></div><div className="rounded-xl border border-border bg-white/5 p-3"><b className="font-mono text-accent-teal">M</b><p className="mt-1 text-muted-foreground">stop rollers</p></div></div>
-            <div className="rounded-xl border border-accent-sky/20 bg-accent-sky/10 p-4 text-sm"><p className="text-[10px] tracking-wider text-accent-sky uppercase">Live status</p><p className="mt-2 font-semibold">{teleop.label}</p><p className="mt-1 text-secondary-foreground">X: {teleop.x.toFixed(2)} · Z: {teleop.y.toFixed(2)} · Heading {teleop.heading.toFixed(0)}°</p><p className="mt-1 text-secondary-foreground">Inventory: {teleop.holding ? "Carrying Element" : "Empty Rollers"}</p><p className="mt-1 text-secondary-foreground">Power Vector: {teleop.power}% · Active Rollers: {teleop.intake}</p></div>
+            <div className="grid grid-cols-2 gap-2 text-xs"><div className="rounded-xl border border-border bg-white/5 p-3"><Keyboard className="mb-2 size-4 text-accent-sky" /><b>WASD</b><p className="mt-1 text-muted-foreground">drive / strafe</p></div><div className="rounded-xl border border-border bg-white/5 p-3"><Target className="mb-2 size-4 text-accent-sky" /><b>Arrows</b><p className="mt-1 text-muted-foreground">turn + aim</p></div><div className="rounded-xl border border-border bg-white/5 p-3"><b className="font-mono text-accent-teal">J / U</b><p className="mt-1 text-muted-foreground">toggle intake</p></div><div className="rounded-xl border border-border bg-white/5 p-3"><b className="font-mono text-accent-teal">L / N</b><p className="mt-1 text-muted-foreground">launch ball</p></div><div className="rounded-xl border border-border bg-white/5 p-3"><Zap className="mb-2 size-4 text-amber-300" /><b>I / K</b><p className="mt-1 text-muted-foreground">power + / −</p></div><div className="rounded-xl border border-border bg-white/5 p-3"><b className="font-mono text-accent-teal">M</b><p className="mt-1 text-muted-foreground">stop rollers</p></div></div>
+            <div className="rounded-xl border border-accent-sky/20 bg-accent-sky/10 p-4 text-sm"><p className="text-[10px] tracking-wider text-accent-sky uppercase">Live status</p><p className="mt-2 font-semibold">{teleop.label}</p><p className="mt-1 text-secondary-foreground">X: {teleop.x.toFixed(2)} · Z: {teleop.y.toFixed(2)} · Heading {teleop.heading.toFixed(0)}°</p><p className="mt-1 text-secondary-foreground">Inventory: {teleop.holding ? "Carrying Element" : "Empty Rollers"}</p><p className="mt-1 text-secondary-foreground">Score: {teleop.score} · Power: {Math.round(teleop.power)}% · Active Rollers: {teleop.intake}</p></div>
           </aside>
         </div>
       ) : (
