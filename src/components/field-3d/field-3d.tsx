@@ -47,6 +47,7 @@ function isolateHiveMovingGroup(root: THREE.Object3D): THREE.Group | null {
       root.traverse((n) => names.push(n.name || "(unnamed)"));
       console.warn(
         "[BioBuzz] No node in BIOBUZZ-v1-v1.glb matched HIVE_NODE_PATTERN — " +
+
           "the hive will not tip. Update the pattern in field-3d.tsx to one of these node names:",
         names,
       );
@@ -678,7 +679,8 @@ function Scene({
   /** Balls scored on the blue side of the hive — drives weight-tipping physics. */
   blueCount?: number;
   /** Fires once, at the exact frame the hive crosses its max tilt angle. */
-+  onHiveTip?: (side: "red" | "blue") => void; }) {
+  onHiveTip?: (side: "red" | "blue") => void;
+}) {
    return (
      <Canvas
        shadows
