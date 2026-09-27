@@ -35,27 +35,25 @@ let ballId = 0;
 const floorBall = (x: number, y: number): Ball => ({ id: ballId++, x, y, h: 0, vx: 0, vy: 0, vh: 0, flying: false });
 const starterBalls = () => [floorBall(1, 3), floorBall(4, 4), floorBall(0.5, 1.5)];
 
-// Placeholder values — swap in FIRST's official 2026-27 BioBuzz scoring table
-// once it's published.
+// Placeholder values — swap in FIRST's official 2026-27 BioBuzz scoring table once it's published.
 const SCORE = { hiveTip: 20 };
 
- function BioBuzz() {
-   const [mode, setMode] = useState<"teleop" | "autonomous">("teleop");
-   const [teleop, setTeleop] = useState<Frame>(initialFrame);
-   const [balls, setBalls] = useState<Ball[]>(starterBalls);
-   const [inv, setInv] = useState(0);
+function BioBuzz() {
+  const [mode, setMode] = useState<"teleop" | "autonomous">("teleop");
+  const [teleop, setTeleop] = useState<Frame>(initialFrame);
+  const [balls, setBalls] = useState<Ball[]>(starterBalls);
+  const [inv, setInv] = useState(0);
   const [alliance, setAlliance] = useState<"red" | "blue">("blue");
   const [redCount, setRedCount] = useState(0);
   const [blueCount, setBlueCount] = useState(0);
-   const ballsRef = useRef<Ball[]>(balls);
-   const invRef = useRef(0);
-   const frameRef = useRef<Frame>(teleop);
-   const powerRef = useRef(60);
+  const ballsRef = useRef<Ball[]>(balls);
+  const invRef = useRef(0);
+  const frameRef = useRef<Frame>(teleop);
+  const powerRef = useRef(60);
   const outtakeUntilRef = useRef(0);
   const redCountRef = useRef(0);
   const blueCountRef = useRef(0);
   const hiveTipEventRef = useRef<"red" | "blue" | null>(null);
-  const outtakeUntilRef = useRef(0);
   const scorePulseRef = useRef(0);
   const [scorePulse, setScorePulse] = useState(0);
 
@@ -92,7 +90,7 @@ const SCORE = { hiveTip: 20 };
       if (held.has("arrowright")) heading += 160 * dt;
       heading = ((heading % 360) + 360) % 360;
       const rad = (heading * Math.PI) / 180;
-      // forward / right vectors in field-grid space (matches the 3D robot's facing)
+      
       const forwardX = Math.sin(rad), forwardY = Math.cos(rad);
       const rightX = Math.cos(rad), rightY = -Math.sin(rad);
       let x = c.x, y = c.y;
@@ -127,7 +125,7 @@ const SCORE = { hiveTip: 20 };
           invRef.current--;
           outtakeUntilRef.current = now + 350;
           
-          // Establish initial launcher position at the center-rear edge of the robot
+          // Establish initial launcher position at the center-rear edge of the robot configuration
           const mx = x - forwardX * 0.1, my = y - forwardY * 0.1, mh = 0.45;
           
           // Map slider power directly to forward speed velocity magnitude (Higher % = More power)
@@ -143,8 +141,8 @@ const SCORE = { hiveTip: 20 };
             h: mh, 
             flying: true,
             // Split horizontal components along the robot's specific heading direction
-            vx: forwardX * Math.cos(launchAngleElevation) * launchVelocityMagnitude, 
-            vy: forwardY * Math.cos(launchAngleElevation) * launchVelocityMagnitude,
+            vx: -forwardX * Math.cos(launchAngleElevation) * launchVelocityMagnitude, 
+            vy: -forwardY * Math.cos(launchAngleElevation) * launchVelocityMagnitude,
             // Upward vertical speed vector component
             vh: Math.sin(launchAngleElevation) * launchVelocityMagnitude,
           }];
@@ -153,29 +151,24 @@ const SCORE = { hiveTip: 20 };
         } else label = "Launcher empty";
       }
 
-       // Projectile physics
+      // Projectile physics integration loop with scoring zone validation rules
       let scoredNow = false;
-       list = list.flatMap((b) => {
-         if (!b.flying) return [b];
-         const nb = { ...b, x: b.x + b.vx * dt, y: b.y + b.vy * dt, h: b.h + b.vh * dt, vh: b.vh - GRAVITY * dt };
-         if (nb.h <= 0 && nb.vh < 0) {
+      list = list.flatMap((b) => {
+        if (!b.flying) return [b];
+        const nb = { ...b, x: b.x + b.vx * dt, y: b.y + b.vy * dt, h: b.h + b.vh * dt, vh: b.vh - GRAVITY * dt };
+        if (nb.h <= 0 && nb.vh < 0) {
           if (Math.hypot(nb.x - HIVE.x, nb.y - HIVE.y) < HIVE_RADIUS) {
             score += 5;
             label = "Scored in the hive! +5";
             scoredNow = true;
-            return [];
+            return []; // Ball scored, removed cleanly from tracking memory layout
           }
-           return [{ ...nb, h: 0, vx: 0, vy: 0, vh: 0, flying: false, x: Math.max(0, Math.min(MAX, nb.x)), y: Math.max(0, Math.min(MAX, nb.y)) }];
-         }
-         return [nb];
-       });
-      if (scoredNow) {
-        if (alliance === "red") redCountRef.current++;
-        else blueCountRef.current++;
-      }
+          return [{ ...nb, h: 0, vx: 0, vy: 0, vh: 0, flying: false, x: Math.max(0, Math.min(MAX, nb.x)), y: Math.max(0, Math.min(MAX, nb.y)) }];
+        }
+        return [nb];
+      });
 
-      // Consume a hive-tip event reported by the R3F tilt rig (HiveTiltRig runs
-      // in its own useFrame loop; this poll keeps the two loops decoupled).
+      // Consume a hive-tip event reported by the R3F tilt rig
       if (hiveTipEventRef.current) {
         const tippedSide = hiveTipEventRef.current;
         hiveTipEventRef.current = null;
@@ -184,6 +177,9 @@ const SCORE = { hiveTip: 20 };
       }
 
       if (scoredNow) {
+        if (alliance === "red") redCountRef.current++;
+        else blueCountRef.current++;
+        
         scorePulseRef.current++;
         setScorePulse(scorePulseRef.current);
       }
@@ -212,7 +208,7 @@ const SCORE = { hiveTip: 20 };
       window.removeEventListener("keyup", onUp);
       cancelAnimationFrame(animationId);
     };
-  }, [mode]);
+  }, [mode, alliance]);
 
   const reset = () => {
     const f = { ...initialFrame(), label: "Robot reset" };
@@ -228,7 +224,7 @@ const SCORE = { hiveTip: 20 };
     setBlueCount(0);
     setBalls(ballsRef.current);
   };
- 
+
   const spawn = () => {
     const fresh = Array.from({ length: 6 }, () => floorBall(0.3 + Math.random() * (MAX - 0.6), 0.3 + Math.random() * (MAX - 0.6)));
     ballsRef.current = [...ballsRef.current, ...fresh];
@@ -239,7 +235,6 @@ const SCORE = { hiveTip: 20 };
     hiveTipEventRef.current = side;
   };
 
-   
   // Global telemetry snapshot — single source of truth for the status HUD below.
   const telemetry = {
     status: teleop.label,
@@ -251,6 +246,7 @@ const SCORE = { hiveTip: 20 };
     redCount,
     blueCount,
   };
+
   return (
     <>
       <section className="pt-14 pb-7">
@@ -292,10 +288,18 @@ const SCORE = { hiveTip: 20 };
                 Reset robot
               </button>
             </div>
-
-            <div className="aspect-square bg-ink-deep p-2"><FieldView3D frame={teleop} level={BIO_LEVEL} variant="biobuzz" liveBalls={balls} redCount={redCount} blueCount={blueCount} onHiveTip={handleHiveTip} /></div>
-              
-     
+            <div className="aspect-square bg-ink-deep p-2">
+              <FieldView3D 
+                frame={teleop} 
+                level={BIO_LEVEL} 
+                variant="biobuzz" 
+                liveBalls={balls} 
+                redCount={redCount} 
+                blueCount={blueCount} 
+                onHiveTip={handleHiveTip} 
+                scorePulse={scorePulse}
+              />
+            </div>
           </div>
           
           <aside className="glass-panel flex flex-col gap-5 rounded-3xl p-6 lg:col-span-4">
@@ -337,18 +341,39 @@ const SCORE = { hiveTip: 20 };
               </div>
             </div>
             
-             <div className="rounded-xl border border-accent-sky/20 bg-accent-sky/10 p-4 text-sm">
-               <p className="text-[10px] tracking-wider text-accent-sky uppercase">Telemetry</p>
-               <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 font-mono text-xs">
-                 <span className="text-muted-foreground">Status</span><span className="text-right font-semibold">{telemetry.status}</span>
-                 <span className="text-muted-foreground">Intake</span><span className={`text-right font-semibold ${telemetry.intakeStatus === "INTAKING" ? "text-accent-teal" : ""}`}>{telemetry.intakeStatus}</span>
-                 <span className="text-muted-foreground">Outtake</span><span className={`text-right font-semibold ${telemetry.outtakeStatus === "LAUNCHING" ? "text-amber-300" : ""}`}>{telemetry.outtakeStatus}</span>
-                 <span className="text-muted-foreground">Balls Collected</span><span className="text-right font-semibold">{telemetry.ballsCollected}/{BALL_CAP} MAX</span>
-                <span className="text-muted-foreground">Hive</span><span className={`text-right font-semibold ${telemetry.hiveState === "HIVE TIPPED" ? "text-tape" : ""}`}>{telemetry.hiveState}</span>
-                <span className="text-muted-foreground">Red / Blue mass</span><span className="text-right font-semibold">{telemetry.redCount} / {telemetry.blueCount}</span>
-               </div>
-               <p className="mt-3 text-secondary-foreground">X: {teleop.x.toFixed(2)} · Z: {teleop.y.toFixed(2)} · Heading {telemetry.headingDegrees}°</p>
-               <p className="mt-1 text-secondary-foreground">Score: {teleop.score} · Power: {Math.round(teleop.power)}%</p>
+            <div className="rounded-xl border border-accent-sky/20 bg-accent-sky/10 p-4 text-sm">
+              <p className="text-[10px] tracking-wider text-accent-sky uppercase">Telemetry</p>
+              <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 font-mono text-xs">
+                <span className="text-muted-foreground">Status</span>
+                <span className="text-right font-semibold">{telemetry.status}</span>
+                
+                <span className="text-muted-foreground">Intake</span>
+                <span className={`text-right font-semibold ${telemetry.intakeStatus === "INTAKING" ? "text-accent-teal" : ""}`}>
+                  {telemetry.intakeStatus}
+                </span>
+                
+                <span className="text-muted-foreground">Outtake</span>
+                <span className={`text-right font-semibold ${telemetry.outtakeStatus === "LAUNCHING" ? "text-amber-300" : ""}`}>
+                  {telemetry.outtakeStatus}
+                </span>
+                
+                <span className="text-muted-foreground">Balls Collected</span>
+                <span className="text-right font-semibold">{telemetry.ballsCollected}/{BALL_CAP} MAX</span>
+                
+                <span className="text-muted-foreground">Hive</span>
+                <span className={`text-right font-semibold ${telemetry.hiveState === "HIVE TIPPED" ? "text-red-400" : "text-green-400"}`}>
+                  {telemetry.hiveState}
+                </span>
+                
+                <span className="text-muted-foreground">Red / Blue mass</span>
+                <span className="text-right font-semibold">{telemetry.redCount} / {telemetry.blueCount}</span>
+              </div>
+              <p className="mt-3 text-secondary-foreground font-mono text-xs">
+                X: {teleop.x.toFixed(2)} · Z: {teleop.y.toFixed(2)} · Heading {telemetry.headingDegrees}°
+              </p>
+              <p className="mt-1 text-secondary-foreground font-mono text-xs">
+                Score: {teleop.score} · Power: {Math.round(teleop.power)}%
+              </p>
               <div className="mt-3 flex items-center gap-2">
                 <span className="text-[10px] tracking-wider text-muted-foreground uppercase">Practicing as</span>
                 <button
@@ -358,13 +383,15 @@ const SCORE = { hiveTip: 20 };
                   {alliance}
                 </button>
               </div>
-             </div>
+            </div>
+          </aside>
+        </div>
       ) : (
         <div>
           <div className="mb-5 rounded-2xl border border-accent-teal/30 bg-accent-teal/10 p-4 text-sm text-secondary-foreground">
             Autonomous console: edit the program, then run it to see pollen collection and nectar scoring on the BioBuzz field.
           </div>
-          <SimWorkbench level={BIO_LEVEL} starter={AUTO} variant="biobuzz" />
+          <SimWorkbench level={BIO_LEVEL} starter={AUTO} variant="biobuzz" onSpawnBalls={spawn} />
         </div>
       )}
     </>
