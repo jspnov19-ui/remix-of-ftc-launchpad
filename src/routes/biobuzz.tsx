@@ -18,7 +18,7 @@ export const Route = createFileRoute("/biobuzz")({
 const BIO_LEVEL: Level = { start: { x: 1, y: 5 }, sample: { x: 1, y: 3 }, goal: { x: 3, y: 1 } };
 const AUTO = "drive(2)      // roll to the pollen\nintake(in)    // suck it up\ndrive(2)\nturn(90)\ndrive(2)      // into the nectar box\naim(15)\npower(80)\nscore()";
 
-const initialFrame = (): Frame => ({ ...runProgram("", BIO_LEVEL).frames!, label: "System Ready" });
+const initialFrame = (): Frame => ({ ...runProgram("", BIO_LEVEL).frames[0]!, label: "System Ready" });
 const MAX = FIELD_TILES - 1;
 
 const BALL_CAP = 3; // FTC BioBuzz inventory cap — exactly 3 per rules
