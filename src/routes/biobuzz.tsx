@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Bug, Gamepad2, Keyboard, Sparkles, Target, Zap } from "lucide-react";
 import { FieldView3D } from "@/components/field-3d/field-3d";
 import { SimWorkbench } from "@/components/sim-workbench";
