@@ -21,9 +21,26 @@ const AUTO = "drive(2)      // roll to the pollen\nintake(in)    // suck it up\n
 const initialFrame = (): Frame => ({ ...runProgram("", BIO_LEVEL).frames[0]!, label: "System Ready" });
 const MAX = FIELD_TILES - 1;
 
+const MAX_POLLEN = 4;
+const PICKUP_DIST = 0.45; // tiles
+const GRAVITY = 4.9; // tiles / s²
+const HIVE = { x: (FIELD_TILES - 1) / 2, y: (FIELD_TILES - 1) / 2 }; // field center
+const HIVE_RADIUS = 0.7;
+
+type Ball = { id: number; x: number; y: number; h: number; vx: number; vy: number; vh: number; flying: boolean };
+let ballId = 0;
+const floorBall = (x: number, y: number): Ball => ({ id: ballId++, x, y, h: 0, vx: 0, vy: 0, vh: 0, flying: false });
+const starterBalls = () => [floorBall(1, 3), floorBall(4, 4), floorBall(0.5, 1.5)];
+
 function BioBuzz() {
   const [mode, setMode] = useState<"teleop" | "autonomous">("teleop");
   const [teleop, setTeleop] = useState<Frame>(initialFrame);
+  const [balls, setBalls] = useState<Ball[]>(starterBalls);
+  const [inv, setInv] = useState(0);
+  const ballsRef = useRef<Ball[]>(balls);
+  const invRef = useRef(0);
+  const frameRef = useRef<Frame>(teleop);
+  const powerRef = useRef(60);
 
   useEffect(() => {
     if (mode !== "teleop") return;
@@ -51,49 +68,76 @@ function BioBuzz() {
     const tick = (now: number) => {
       const dt = Math.min((now - last) / 1000, 0.05);
       last = now;
-      setTeleop((c) => {
-        const speed = 2.2 * dt; // tiles per second
-        const turn = 160 * dt;
-        let heading = c.heading;
-        if (held.has("arrowleft")) heading -= turn;
-        if (held.has("arrowright")) heading += turn;
-        heading = ((heading % 360) + 360) % 360;
-        const rad = (heading * Math.PI) / 180;
-        const fx = Math.sin(rad), fy = -Math.cos(rad);
-        const rx = Math.cos(rad), ry = Math.sin(rad);
-        let x = c.x, y = c.y;
-        if (held.has("w")) { x += fx * speed; y += fy * speed; }
-        if (held.has("s")) { x -= fx * speed; y -= fy * speed; }
-        if (held.has("d")) { x += rx * speed; y += ry * speed; }
-        if (held.has("a")) { x -= rx * speed; y -= ry * speed; }
-        x = Math.max(0, Math.min(MAX, x));
-        y = Math.max(0, Math.min(MAX, y));
+      const c = frameRef.current;
+      const speed = 2.2 * dt;
+      let heading = c.heading;
+      if (held.has("arrowleft")) heading -= 160 * dt;
+      if (held.has("arrowright")) heading += 160 * dt;
+      heading = ((heading % 360) + 360) % 360;
+      const rad = (heading * Math.PI) / 180;
+      // forward / right vectors in field-grid space (matches the 3D robot's facing)
+      const forwardX = Math.sin(rad), forwardY = Math.cos(rad);
+      const rightX = Math.cos(rad), rightY = -Math.sin(rad);
+      let x = c.x, y = c.y;
+      if (held.has("w")) { x += forwardX * speed; y += forwardY * speed; }
+      if (held.has("s")) { x -= forwardX * speed; y -= forwardY * speed; }
+      if (held.has("d")) { x += rightX * speed; y += rightY * speed; }
+      if (held.has("a")) { x -= rightX * speed; y -= rightY * speed; }
+      x = Math.max(0, Math.min(MAX, x));
+      y = Math.max(0, Math.min(MAX, y));
+      if (held.has("i")) powerRef.current = Math.min(100, powerRef.current + 60 * dt);
+      if (held.has("k")) powerRef.current = Math.max(10, powerRef.current - 60 * dt);
 
-        let { holding, taken, score } = c;
-        let label = held.size ? "Driving" : "Waiting for input…";
-        const sample = BIO_LEVEL.sample!;
-        if (intakeOn && !holding && !taken.includes(0) && Math.hypot(x - sample.x, y - sample.y) < 0.5) {
-          holding = true;
-          taken = [0];
-          label = "Pollen collected!";
+      let label = held.size ? "Driving" : "Waiting for input…";
+      let score = c.score;
+      let list = ballsRef.current;
+
+      // Intake: pick up floor balls touching the front bumper
+      if (intakeOn) {
+        const bx = x + forwardX * 0.3, by = y + forwardY * 0.3;
+        list = list.filter((b) => {
+          if (b.flying || invRef.current >= MAX_POLLEN) return true;
+          if (Math.hypot(b.x - bx, b.y - by) < PICKUP_DIST) { invRef.current++; label = "Pollen collected!"; return false; }
+          return true;
+        });
+        if (invRef.current >= MAX_POLLEN) label = "Storage full (4 pollen)";
+      }
+
+      // Fire: spawn a projectile at the rear-top muzzle, aimed at the hive
+      if (fire) {
+        fire = false;
+        if (invRef.current > 0) {
+          invRef.current--;
+          const mx = x - forwardX * 0.3, my = y - forwardY * 0.3, mh = 0.45;
+          const dx = HIVE.x - mx, dy = HIVE.y - my;
+          const dist = Math.max(0.3, Math.hypot(dx, dy));
+          const flight = 0.6 + dist * 0.25 * (60 / powerRef.current);
+          list = [...list, {
+            id: ballId++, x: mx, y: my, h: mh, flying: true,
+            vx: dx / flight, vy: dy / flight,
+            vh: (0 - mh + 0.5 * GRAVITY * flight * flight) / flight + 0.6,
+          }];
+          label = "Launched!";
+        } else label = "Launcher empty";
+      }
+
+      // Projectile physics
+      list = list.flatMap((b) => {
+        if (!b.flying) return [b];
+        const nb = { ...b, x: b.x + b.vx * dt, y: b.y + b.vy * dt, h: b.h + b.vh * dt, vh: b.vh - GRAVITY * dt };
+        if (nb.h <= 0 && nb.vh < 0) {
+          if (Math.hypot(nb.x - HIVE.x, nb.y - HIVE.y) < HIVE_RADIUS) { score += 5; label = "Scored in the hive! +5"; return []; }
+          return [{ ...nb, h: 0, vx: 0, vy: 0, vh: 0, flying: false, x: Math.max(0, Math.min(MAX, nb.x)), y: Math.max(0, Math.min(MAX, nb.y)) }];
         }
-        if (fire) {
-          fire = false;
-          if (holding) {
-            holding = false;
-            const goal = BIO_LEVEL.goal!;
-            if (Math.hypot(x - goal.x, y - goal.y) < 0.6) {
-              score += 12;
-              label = "Scored in the nectar box! +12";
-            } else {
-              taken = [];
-              label = "Missed — pollen returned to its mark";
-            }
-          } else label = "Launcher empty";
-        }
-        const power = held.has("i") ? Math.min(100, c.power + 60 * dt) : held.has("k") ? Math.max(0, c.power - 60 * dt) : c.power;
-        return { ...c, x, y, heading, holding, taken, score, label, power, intake: intakeOn ? "in" : "idle" };
+        return [nb];
       });
+
+      ballsRef.current = list;
+      const next: Frame = { ...c, x, y, heading, score, label, power: powerRef.current, holding: invRef.current > 0, intake: intakeOn ? "in" : "idle" };
+      frameRef.current = next;
+      setTeleop(next);
+      setBalls(list);
+      setInv(invRef.current);
       animationId = requestAnimationFrame(tick);
     };
 
@@ -107,7 +151,21 @@ function BioBuzz() {
     };
   }, [mode]);
 
-  const reset = () => setTeleop({ ...initialFrame(), label: "Robot reset" });
+  const reset = () => {
+    const f = { ...initialFrame(), label: "Robot reset" };
+    frameRef.current = f;
+    invRef.current = 0;
+    ballsRef.current = starterBalls();
+    setTeleop(f);
+    setInv(0);
+    setBalls(ballsRef.current);
+  };
+
+  const spawn = () => {
+    const fresh = Array.from({ length: 6 }, () => floorBall(0.3 + Math.random() * (MAX - 0.6), 0.3 + Math.random() * (MAX - 0.6)));
+    ballsRef.current = [...ballsRef.current, ...fresh];
+    setBalls(ballsRef.current);
+  };
 
   return (
     <>
